@@ -182,7 +182,7 @@ const Home = () => {
             <motion.div key={d.id} initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.1 }}
               className="group rounded-3xl bg-background border border-border overflow-hidden shadow-card hover:-translate-y-1 transition-transform">
               <div className={`relative ${d.accent === "gyn" ? "gradient-gyn" : "gradient-peds"} p-6`}>
-                <img src={d.img} alt={d.name} className="mx-auto h-32 w-32 rounded-full object-cover border-4 border-background shadow-card" />
+                <img src={d.img} alt={d.name} className="mx-auto h-32 w-32 rounded-full object-cover object-top border-4 border-background shadow-card" />
               </div>
               <div className="p-6 text-center">
                 <h3 className="font-display text-lg font-bold text-primary-deep">{d.name}</h3>
