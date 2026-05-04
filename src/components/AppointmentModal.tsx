@@ -32,7 +32,7 @@ export const AppointmentModal = ({ trigger, variant = "default", size = "default
       return;
     }
     
-    const assignedDoctor = defaultDoctor || (form.department === "Gynecology" ? "Dr. Anjali Verma" : "Dr. Rajeev Kumar");
+    const assignedDoctor = defaultDoctor || (form.department === "Gynecology" ? "Dr. Mahera Erum" : "Dr. Irfan Anwar");
     
     const id = await addAppointment({
       patientName: form.name,
