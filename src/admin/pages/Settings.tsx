@@ -86,7 +86,7 @@ const Settings = () => {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {doctors.map(d => (
               <div key={d.id} className="border border-border rounded-xl p-4 flex gap-4 bg-secondary/20">
-                <img src={d.img} alt={d.name} className="h-16 w-16 rounded-full object-cover shrink-0" />
+                <img src={d.img} alt={d.name} className="h-16 w-16 rounded-full object-cover object-top shrink-0" />
                 <div className="flex-1 overflow-hidden">
                   <div className="font-bold text-primary-deep truncate">{d.name}</div>
                   <div className="text-xs text-muted-foreground truncate">{d.role}</div>
