@@ -1,0 +1,76 @@
+import { useState } from "react";
+import { motion } from "framer-motion";
+import { CalendarCheck, FileText, History, Pill } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { toast } from "sonner";
+import { SEO } from "@/components/SEO";
+
+const features = [
+  { icon: CalendarCheck, title: "View Appointments", text: "See upcoming and past appointments at a glance." },
+  { icon: FileText, title: "Download Reports", text: "Access your lab reports and discharge summaries." },
+  { icon: History, title: "Medical History", text: "A consolidated view of your visits and diagnoses." },
+  { icon: Pill, title: "Prescription Records", text: "Refer to active and past prescriptions anytime." },
+];
+
+const Portal = () => {
+  const [mode, setMode] = useState<"login" | "register">("login");
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    toast.success(mode === "login" ? "Welcome back!" : "Account created — please sign in.");
+    if (mode === "register") setMode("login");
+  };
+
+  return (
+    <>
+      <SEO title="Patient Portal | Care Hospital" description="Sign in to your Care Hospital patient portal to view appointments, reports and prescriptions." />
+
+      <section className="gradient-hero">
+        <div className="container py-20 text-center">
+          <h1 className="font-display text-4xl md:text-5xl font-bold text-primary-deep">Patient Portal</h1>
+          <p className="mt-4 max-w-2xl mx-auto text-foreground/70">Your health records, appointments, and prescriptions — all in one place.</p>
+        </div>
+      </section>
+
+      <section className="container py-16 grid gap-10 lg:grid-cols-2 items-start">
+        <motion.div initial={{ opacity: 0, x: -20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }}
+          className="rounded-3xl bg-background border border-border p-8 shadow-card">
+          <div className="flex gap-2 p-1 rounded-xl bg-secondary mb-6">
+            <button onClick={() => setMode("login")} className={`flex-1 rounded-lg py-2 text-sm font-semibold transition-colors ${mode === "login" ? "bg-background text-primary-deep shadow-soft" : "text-muted-foreground"}`}>Login</button>
+            <button onClick={() => setMode("register")} className={`flex-1 rounded-lg py-2 text-sm font-semibold transition-colors ${mode === "register" ? "bg-background text-primary-deep shadow-soft" : "text-muted-foreground"}`}>Register</button>
+          </div>
+          <form onSubmit={submit} className="space-y-4">
+            {mode === "register" && (
+              <>
+                <div className="space-y-2"><Label htmlFor="p-name">Full Name</Label><Input id="p-name" required /></div>
+                <div className="space-y-2"><Label htmlFor="p-phone">Phone</Label><Input id="p-phone" type="tel" required /></div>
+              </>
+            )}
+            <div className="space-y-2"><Label htmlFor="p-email">Email</Label><Input id="p-email" type="email" required /></div>
+            <div className="space-y-2"><Label htmlFor="p-pass">Password</Label><Input id="p-pass" type="password" required /></div>
+            <Button type="submit" size="lg" className="w-full">{mode === "login" ? "Login" : "Create Account"}</Button>
+            <p className="text-xs text-center text-muted-foreground">Demo UI — no backend connected.</p>
+          </form>
+        </motion.div>
+
+        <motion.div initial={{ opacity: 0, x: 20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }}>
+          <h2 className="font-display text-2xl font-bold text-primary-deep">What you'll get</h2>
+          <p className="mt-2 text-muted-foreground">Convenient self-service for every patient.</p>
+          <div className="mt-6 grid gap-4 sm:grid-cols-2">
+            {features.map((f) => (
+              <div key={f.title} className="rounded-2xl bg-primary-soft/60 p-5">
+                <div className="grid h-10 w-10 place-items-center rounded-xl gradient-primary text-primary-foreground"><f.icon className="h-5 w-5" /></div>
+                <h3 className="mt-3 font-display font-bold text-primary-deep">{f.title}</h3>
+                <p className="mt-1 text-sm text-muted-foreground">{f.text}</p>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+      </section>
+    </>
+  );
+};
+
+export default Portal;
