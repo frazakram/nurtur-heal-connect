@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { NavLink, Link } from "react-router-dom";
-import { Menu, X, HeartPulse } from "lucide-react";
+import { Menu, X, HeartPulse, ShieldCheck } from "lucide-react";
 import { AppointmentModal } from "@/components/AppointmentModal";
 import { cn } from "@/lib/utils";
 
@@ -42,7 +42,10 @@ export const Navbar = () => {
             </NavLink>
           ))}
         </nav>
-        <div className="hidden lg:block">
+        <div className="hidden lg:flex items-center gap-2">
+          <Link to="/admin/login" className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-semibold text-foreground/70 hover:text-primary-deep hover:border-primary transition-colors">
+            <ShieldCheck className="h-3.5 w-3.5" /> Staff Login
+          </Link>
           <AppointmentModal />
         </div>
         <button
@@ -72,7 +75,12 @@ export const Navbar = () => {
                 {l.label}
               </NavLink>
             ))}
-            <div className="pt-2"><AppointmentModal /></div>
+            <div className="pt-2 flex flex-col gap-2">
+              <Link to="/admin/login" onClick={() => setOpen(false)} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm font-semibold text-foreground/70">
+                <ShieldCheck className="h-4 w-4" /> Staff Login
+              </Link>
+              <AppointmentModal />
+            </div>
           </nav>
         </div>
       )}
