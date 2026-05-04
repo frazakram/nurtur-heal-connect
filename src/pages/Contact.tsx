@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { MapPin, Phone, Mail, Clock } from "lucide-react";
+import { MapPin, Phone, Mail, Clock, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { SEO } from "@/components/SEO";
+import { useHospital } from "../admin/context/HospitalContext";
 
 const hours = [
   { day: "Monday – Saturday", time: "8:00 AM – 8:00 PM" },
@@ -15,6 +16,7 @@ const hours = [
 ];
 
 const Contact = () => {
+  const { info } = useHospital();
   const [form, setForm] = useState({ name: "", phone: "", email: "", message: "" });
 
   const onSubmit = (e: React.FormEvent) => {
@@ -23,6 +25,10 @@ const Contact = () => {
       toast.error("Please fill in name, phone and message");
       return;
     }
+    const newMsg = { ...form, date: new Date().toISOString() };
+    const existing = JSON.parse(localStorage.getItem('messages') || '[]');
+    localStorage.setItem('messages', JSON.stringify([...existing, newMsg]));
+    
     toast.success("Thank you! We'll be in touch shortly.");
     setForm({ name: "", phone: "", email: "", message: "" });
   };
@@ -44,7 +50,7 @@ const Contact = () => {
             <div className="flex gap-3"><MapPin className="h-5 w-5 text-primary mt-1 shrink-0" />
               <div>
                 <div className="font-semibold text-primary-deep">Address</div>
-                <p className="text-sm text-muted-foreground mt-1">Mohalla - Daira, Near Fruit Market, Sasaram, District - Rohtas, Bihar - 821115</p>
+                <p className="text-sm text-muted-foreground mt-1">{info.address}</p>
               </div>
             </div>
           </div>
@@ -52,14 +58,21 @@ const Contact = () => {
             <div className="rounded-2xl bg-background border border-border p-6 shadow-card">
               <Phone className="h-5 w-5 text-primary" />
               <div className="font-semibold text-primary-deep mt-2">Phone</div>
-              <p className="text-sm text-muted-foreground">+91 XXXXXXXXXX</p>
+              <p className="text-sm text-muted-foreground">{info.phone}</p>
             </div>
             <div className="rounded-2xl bg-background border border-border p-6 shadow-card">
               <Mail className="h-5 w-5 text-primary" />
               <div className="font-semibold text-primary-deep mt-2">Email</div>
-              <p className="text-sm text-muted-foreground">care@carehospital.in</p>
+              <p className="text-sm text-muted-foreground">{info.email}</p>
             </div>
           </div>
+          
+          <Button asChild variant="outline" className="w-full bg-green-50 text-green-700 border-green-200 hover:bg-green-100 hover:text-green-800">
+            <a href={`https://wa.me/${info.phone.replace(/[^0-9]/g, '')}`} target="_blank" rel="noreferrer">
+              <MessageCircle className="mr-2 h-4 w-4" /> Message on WhatsApp
+            </a>
+          </Button>
+
           <div className="rounded-2xl bg-background border border-border p-6 shadow-card">
             <div className="flex items-center gap-2"><Clock className="h-5 w-5 text-primary" />
               <div className="font-semibold text-primary-deep">Working Hours</div>
@@ -106,7 +119,7 @@ const Contact = () => {
         <div className="rounded-3xl overflow-hidden shadow-card border border-border">
           <iframe
             title="Care Hospital location"
-            src="https://www.google.com/maps?q=Sasaram,Bihar&output=embed"
+            src="https://www.google.com/maps?q=Daira,+Near+Fruit+Market,+Sasaram,+Rohtas,+Bihar+821115&output=embed"
             width="100%"
             height="420"
             style={{ border: 0 }}

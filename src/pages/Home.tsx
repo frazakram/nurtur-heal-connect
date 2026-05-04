@@ -1,22 +1,10 @@
-import { motion } from "framer-motion";
+import { motion, useInView, animate } from "framer-motion";
+import { useRef, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Baby, Stethoscope, ShieldCheck, Clock, Award, HeartHandshake, ArrowRight, Star, Quote } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AppointmentModal } from "@/components/AppointmentModal";
 import { SEO } from "@/components/SEO";
-
-const testimonials = [
-  { name: "Priya S.", text: "The maternity care was exceptional. The team was kind, attentive, and made me feel safe throughout my pregnancy.", role: "New mother" },
-  { name: "Anita K.", text: "Our baby received wonderful care in the NICU. Forever grateful to the pediatricians and nurses.", role: "Parent" },
-  { name: "Sunita D.", text: "Modern facilities, caring doctors, and very clean. Highly recommend Care Hospital in Sasaram.", role: "Patient" },
-];
-
-const stats = [
-  { value: "5,000+", label: "Patients Served" },
-  { value: "10+", label: "Years of Care" },
-  { value: "2", label: "Specialties" },
-  { value: "24/7", label: "Emergency Support" },
-];
 
 const why = [
   { icon: Award, title: "Experienced Doctors", text: "Senior specialists with deep expertise in maternal and child health." },
@@ -25,7 +13,42 @@ const why = [
   { icon: HeartHandshake, title: "Compassionate Staff", text: "Warm, family-first care for mothers and children." },
 ];
 
-const Home = () => (
+import { useHospital } from "../admin/context/HospitalContext";
+
+const AnimatedCounter = ({ value }: { value: string }) => {
+  const ref = useRef<HTMLSpanElement>(null);
+  const isInView = useInView(ref, { once: true, margin: "-50px" });
+  
+  useEffect(() => {
+    if (!isInView || !ref.current) return;
+    const numMatch = value.match(/\d+,?\d*/);
+    if (!numMatch) {
+      ref.current.textContent = value;
+      return;
+    }
+    const numStr = numMatch[0].replace(/,/g, '');
+    const num = parseInt(numStr, 10);
+    if (isNaN(num)) return;
+    
+    const controls = animate(0, num, {
+      duration: 2,
+      ease: "easeOut",
+      onUpdate(v) {
+        if (ref.current) {
+          ref.current.textContent = value.replace(numMatch[0], Math.floor(v).toLocaleString());
+        }
+      }
+    });
+    return () => controls.stop();
+  }, [isInView, value]);
+
+  return <span ref={ref}>{value}</span>;
+};
+
+const Home = () => {
+  const { stats, testimonials, doctors } = useHospital();
+  
+  return (
   <>
     <SEO title="Care Hospital — Caring for Mothers & Children" description="Specialty Gynecology & Pediatrics hospital in Sasaram, Bihar. Compassionate doctors and 24/7 emergency care." />
 
@@ -50,7 +73,7 @@ const Home = () => (
           </div>
         </motion.div>
         <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.7, delay: 0.1 }} className="relative">
-          <img src="https://placehold.co/720x540/E0F2FE/0369A1?text=Mother+%26+Child+Care" alt="Mother and child care" className="rounded-3xl shadow-card w-full" loading="eager" />
+          <img src="https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?w=800&q=80" alt="Mother and child care" className="rounded-3xl shadow-card w-full h-[400px] md:h-[500px] object-cover" loading="eager" />
           <div className="absolute -bottom-6 -left-6 hidden md:flex items-center gap-3 rounded-2xl bg-background p-4 shadow-card">
             <div className="grid h-12 w-12 place-items-center rounded-xl gradient-gyn"><HeartHandshake className="h-6 w-6 text-gyn-strong" /></div>
             <div>
@@ -111,8 +134,8 @@ const Home = () => (
       <div className="rounded-3xl gradient-primary p-10 text-primary-foreground shadow-glow">
         <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4 text-center">
           {stats.map((s) => (
-            <div key={s.label}>
-              <div className="font-display text-4xl md:text-5xl font-bold">{s.value}</div>
+            <div key={s.id || s.label}>
+              <div className="font-display text-4xl md:text-5xl font-bold"><AnimatedCounter value={s.value} /></div>
               <div className="mt-2 text-sm opacity-90">{s.label}</div>
             </div>
           ))}
@@ -147,6 +170,33 @@ const Home = () => (
       </div>
     </section>
 
+    {/* Featured Doctors */}
+    <section className="bg-primary-soft/40 py-20">
+      <div className="container">
+        <div className="text-center max-w-2xl mx-auto">
+          <h2 className="font-display text-3xl md:text-4xl font-bold text-primary-deep">Featured Specialists</h2>
+          <p className="mt-3 text-muted-foreground">Expert care from our renowned medical team.</p>
+        </div>
+        <div className="mt-12 grid gap-8 md:grid-cols-3">
+          {doctors.slice(0, 3).map((d, i) => (
+            <motion.div key={d.id} initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.1 }}
+              className="group rounded-3xl bg-background border border-border overflow-hidden shadow-card hover:-translate-y-1 transition-transform">
+              <div className={`relative ${d.accent === "gyn" ? "gradient-gyn" : "gradient-peds"} p-6`}>
+                <img src={d.img} alt={d.name} className="mx-auto h-32 w-32 rounded-full object-cover border-4 border-background shadow-card" />
+              </div>
+              <div className="p-6 text-center">
+                <h3 className="font-display text-lg font-bold text-primary-deep">{d.name}</h3>
+                <p className="text-xs font-semibold text-primary mt-1">{d.role}</p>
+                <Button asChild variant="ghost" className="mt-4 text-primary-deep hover:bg-secondary">
+                  <Link to="/doctors">View Profile <ArrowRight className="ml-1 h-4 w-4" /></Link>
+                </Button>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      </div>
+    </section>
+
     {/* CTA Banner */}
     <section className="container pb-20">
       <div className="relative overflow-hidden rounded-3xl gradient-hero p-10 md:p-14 text-center shadow-card">
@@ -163,6 +213,7 @@ const Home = () => (
       </div>
     </section>
   </>
-);
+  );
+};
 
 export default Home;

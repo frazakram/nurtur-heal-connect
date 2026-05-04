@@ -30,6 +30,8 @@ import Invoice from "./admin/pages/Invoice";
 import Inventory from "./admin/pages/Inventory";
 import Reports from "./admin/pages/Reports";
 import AdminSettings from "./admin/pages/Settings";
+import BlogAdmin from "./admin/pages/BlogAdmin";
+import Messages from "./admin/pages/Messages";
 
 const queryClient = new QueryClient();
 
@@ -68,6 +70,8 @@ const App = () => (
                   <Route path="inventory" element={<Protected page="inventory"><Inventory /></Protected>} />
                   <Route path="reports" element={<Protected page="reports"><Reports /></Protected>} />
                   <Route path="settings" element={<Protected page="settings"><AdminSettings /></Protected>} />
+                  <Route path="blog-admin" element={<Protected page="blogPosts"><BlogAdmin /></Protected>} />
+                  <Route path="messages" element={<Protected page="messages"><Messages /></Protected>} />
                 </Route>
 
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

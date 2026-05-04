@@ -1,7 +1,7 @@
 import { NavLink } from "react-router-dom";
 import {
   LayoutDashboard, Users, CalendarDays, BedDouble, UserCog, Wallet,
-  Receipt, Package, BarChart3, Settings as SettingsIcon, HeartPulse, X,
+  Receipt, Package, BarChart3, Settings as SettingsIcon, HeartPulse, X, MessageSquare
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { can } from "../access";
@@ -17,6 +17,8 @@ const items = [
   { to: "/admin/billing", label: "Billing", icon: Receipt, key: "billing" },
   { to: "/admin/inventory", label: "Inventory", icon: Package, key: "inventory" },
   { to: "/admin/reports", label: "Reports", icon: BarChart3, key: "reports" },
+  { to: "/admin/blog-admin", label: "Blog", icon: HeartPulse, key: "blogPosts" },
+  { to: "/admin/messages", label: "Messages", icon: MessageSquare, key: "messages" },
   { to: "/admin/settings", label: "Settings", icon: SettingsIcon, key: "settings" },
 ];
 
@@ -25,6 +27,8 @@ interface Props { open: boolean; onClose: () => void; }
 export const Sidebar = ({ open, onClose }: Props) => {
   const { user } = useAuth();
   const visible = items.filter((i) => can(user?.role, i.key));
+  const messages = JSON.parse(localStorage.getItem('messages') || '[]');
+  const unreadCount = messages.filter((m: any) => !m.read).length;
 
   return (
     <>
@@ -50,12 +54,17 @@ export const Sidebar = ({ open, onClose }: Props) => {
               onClick={onClose}
               className={({ isActive }) =>
                 cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors justify-between",
                   isActive ? "bg-white text-[hsl(201_96%_22%)] shadow-soft" : "text-white/80 hover:bg-white/10 hover:text-white"
                 )
               }
             >
-              <it.icon className="h-4 w-4" /> {it.label}
+              <div className="flex items-center gap-3">
+                <it.icon className="h-4 w-4" /> {it.label}
+              </div>
+              {it.key === "messages" && unreadCount > 0 && (
+                <span className="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">{unreadCount}</span>
+              )}
             </NavLink>
           ))}
         </nav>
