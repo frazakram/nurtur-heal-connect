@@ -134,6 +134,13 @@ const Contact = () => {
             referrerPolicy="no-referrer-when-downgrade"
           />
         </div>
+        <div className="mt-4 flex justify-end">
+          <Button asChild variant="outline">
+            <a href="https://maps.app.goo.gl/bAiEYqUnBcZDYsok9" target="_blank" rel="noreferrer">
+              <MapPin className="mr-2 h-4 w-4" /> Open in Google Maps
+            </a>
+          </Button>
+        </div>
       </section>
     </>
   );
