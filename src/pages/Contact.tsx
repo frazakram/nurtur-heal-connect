@@ -126,7 +126,7 @@ const Contact = () => {
         <div className="rounded-3xl overflow-hidden shadow-card border border-border">
           <iframe
             title="Care Hospital location"
-            src="https://www.google.com/maps?q=Daira,+Near+Fruit+Market,+Sasaram,+Rohtas,+Bihar+821115&output=embed"
+            src="https://www.google.com/maps?q=Care+Hospital,+Daira,+Sasaram,+Bihar&output=embed"
             width="100%"
             height="420"
             style={{ border: 0 }}
