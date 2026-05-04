@@ -1,4 +1,5 @@
 import { NavLink } from "react-router-dom";
+import { useState, useEffect } from "react";
 import {
   LayoutDashboard, Users, CalendarDays, BedDouble, UserCog, Wallet,
   Receipt, Package, BarChart3, Settings as SettingsIcon, HeartPulse, X, MessageSquare
@@ -6,6 +7,7 @@ import {
 import { useAuth } from "../context/AuthContext";
 import { can } from "../access";
 import { cn } from "@/lib/utils";
+import { supabase } from "../../lib/supabase";
 
 const items = [
   { to: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard, key: "dashboard" },
@@ -27,8 +29,12 @@ interface Props { open: boolean; onClose: () => void; }
 export const Sidebar = ({ open, onClose }: Props) => {
   const { user } = useAuth();
   const visible = items.filter((i) => can(user?.role, i.key));
-  const messages = JSON.parse(localStorage.getItem('messages') || '[]');
-  const unreadCount = messages.filter((m: any) => !m.read).length;
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    supabase.from("messages").select("id", { count: "exact", head: true }).eq("is_read", false)
+      .then(({ count }) => setUnreadCount(count || 0));
+  }, []);
 
   return (
     <>

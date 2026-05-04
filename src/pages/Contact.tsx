@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { SEO } from "@/components/SEO";
 import { useHospital } from "../admin/context/HospitalContext";
+import { supabase } from "../lib/supabase";
 
 const hours = [
   { day: "Monday – Saturday", time: "8:00 AM – 8:00 PM" },
@@ -19,15 +20,17 @@ const Contact = () => {
   const { info } = useHospital();
   const [form, setForm] = useState({ name: "", phone: "", email: "", message: "" });
 
-  const onSubmit = (e: React.FormEvent) => {
+  const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name || !form.phone || !form.message) {
       toast.error("Please fill in name, phone and message");
       return;
     }
-    const newMsg = { ...form, date: new Date().toISOString() };
-    const existing = JSON.parse(localStorage.getItem('messages') || '[]');
-    localStorage.setItem('messages', JSON.stringify([...existing, newMsg]));
+    const { error } = await supabase.from('messages').insert([{ name: form.name, phone: form.phone, email: form.email, message: form.message }]);
+    if (error) {
+      toast.error("Failed to send message: " + error.message);
+      return;
+    }
     
     toast.success("Thank you! We'll be in touch shortly.");
     setForm({ name: "", phone: "", email: "", message: "" });

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { supabase } from "../../lib/supabase";
 import { Check, Trash2, MailOpen, Mail } from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
 import { DataTable, Column } from "../components/DataTable";
@@ -25,29 +26,32 @@ const Messages = () => {
     loadMessages();
   }, []);
 
-  const loadMessages = () => {
-    const data = JSON.parse(localStorage.getItem('messages') || '[]');
-    // Make sure all have an ID
-    const migrated = data.map((m: any, i: number) => ({ ...m, id: m.id || `msg-${i}-${Date.now()}` }));
-    // Sort by date desc
-    migrated.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    setMessages(migrated);
-    localStorage.setItem('messages', JSON.stringify(migrated));
+  const loadMessages = async () => {
+    const { data, error } = await supabase.from('messages').select('*').order('created_at', { ascending: false });
+    if (!error && data) {
+      setMessages(data.map((m: any) => ({ id: m.id, name: m.name || '', phone: m.phone || '', email: m.email || '', message: m.message || '', date: m.created_at || '', read: m.is_read ?? false })));
+    }
   };
 
-  const toggleRead = (id: string, currentReadStatus: boolean) => {
-    const updated = messages.map(m => m.id === id ? { ...m, read: !currentReadStatus } : m);
-    setMessages(updated);
-    localStorage.setItem('messages', JSON.stringify(updated));
-    toast.success(currentReadStatus ? "Marked as unread" : "Marked as read");
+  const toggleRead = async (id: string, currentReadStatus: boolean) => {
+    const { error } = await supabase.from('messages').update({ is_read: !currentReadStatus }).eq('id', id);
+    if (!error) {
+      setMessages(messages.map(m => m.id === id ? { ...m, read: !currentReadStatus } : m));
+      toast.success(currentReadStatus ? "Marked as unread" : "Marked as read");
+    } else {
+      toast.error("Failed to update message status");
+    }
   };
 
-  const deleteMessage = (id: string) => {
+  const deleteMessage = async (id: string) => {
     if (confirm("Are you sure you want to delete this message?")) {
-      const updated = messages.filter(m => m.id !== id);
-      setMessages(updated);
-      localStorage.setItem('messages', JSON.stringify(updated));
-      toast.success("Message deleted");
+      const { error } = await supabase.from('messages').delete().eq('id', id);
+      if (!error) {
+        setMessages(messages.filter(m => m.id !== id));
+        toast.success("Message deleted");
+      } else {
+        toast.error("Failed to delete message");
+      }
     }
   };
 

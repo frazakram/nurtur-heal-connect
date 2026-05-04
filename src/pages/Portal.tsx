@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { SEO } from "@/components/SEO";
 import { useHospital } from "../admin/context/HospitalContext";
 import { fmtDate } from "../admin/utils/formatters";
+import { supabase } from "../lib/supabase";
 
 const features = [
   { icon: CalendarCheck, title: "View Appointments", text: "See upcoming and past appointments at a glance." },
@@ -23,47 +24,68 @@ const Portal = () => {
   const [form, setForm] = useState({ name: "", phone: "", email: "", password: "" });
 
   useEffect(() => {
-    const saved = localStorage.getItem("ch_patient_user");
-    if (saved) {
-      setUser(JSON.parse(saved));
-    }
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session && session.user.user_metadata?.role === 'patient') {
+        setUser({
+          name: session.user.user_metadata?.name || '',
+          phone: session.user.user_metadata?.phone || '',
+          email: session.user.email,
+          registeredDate: session.user.created_at
+        });
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session && session.user.user_metadata?.role === 'patient') {
+        setUser({
+          name: session.user.user_metadata?.name || '',
+          phone: session.user.user_metadata?.phone || '',
+          email: session.user.email,
+          registeredDate: session.user.created_at
+        });
+      } else {
+        setUser(null);
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const usersList = JSON.parse(localStorage.getItem("ch_all_users") || "[]");
 
     if (mode === "register") {
-      if (usersList.find((u: any) => u.phone === form.phone)) {
-        toast.error("An account with this phone number already exists.");
-        return;
-      }
-      const newUser = { 
-        name: form.name, 
-        phone: form.phone, 
+      const { data, error } = await supabase.auth.signUp({
         email: form.email,
-        password: btoa(form.password), // simple hash
-        registeredDate: new Date().toISOString()
-      };
-      const updatedUsers = [...usersList, newUser];
-      localStorage.setItem("ch_all_users", JSON.stringify(updatedUsers));
-      localStorage.setItem("ch_patient_user", JSON.stringify(newUser));
-      setUser(newUser);
-      toast.success("Account created successfully!");
-    } else {
-      const foundUser = usersList.find((u: any) => u.phone === form.phone && u.password === btoa(form.password));
-      if (foundUser) {
-        localStorage.setItem("ch_patient_user", JSON.stringify(foundUser));
-        setUser(foundUser);
-        toast.success("Welcome back!");
+        password: form.password,
+        options: {
+          data: {
+            name: form.name,
+            phone: form.phone,
+            role: 'patient'
+          }
+        }
+      });
+      if (error) {
+        toast.error(error.message);
       } else {
-        toast.error("Invalid phone number or password");
+        toast.success("Account created successfully!");
+      }
+    } else {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: form.email,
+        password: form.password
+      });
+      if (error) {
+        toast.error(error.message);
+      } else {
+        toast.success("Welcome back!");
       }
     }
   };
 
-  const logout = () => {
-    localStorage.removeItem("ch_patient_user");
+  const logout = async () => {
+    await supabase.auth.signOut();
     setUser(null);
     toast.success("Logged out");
   };
@@ -95,14 +117,14 @@ const Portal = () => {
                   <Input id="p-name" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
                 </div>
               )}
-              <div className="space-y-2"><Label htmlFor="p-phone">Phone</Label>
-                <Input id="p-phone" type="tel" required value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-              </div>
               {mode === "register" && (
-                <div className="space-y-2"><Label htmlFor="p-email">Email</Label>
-                  <Input id="p-email" type="email" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+                <div className="space-y-2"><Label htmlFor="p-phone">Phone</Label>
+                  <Input id="p-phone" type="tel" required value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
                 </div>
               )}
+              <div className="space-y-2"><Label htmlFor="p-email">Email</Label>
+                <Input id="p-email" type="email" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+              </div>
               <div className="space-y-2"><Label htmlFor="p-pass">Password</Label>
                 <Input id="p-pass" type="password" required value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
               </div>

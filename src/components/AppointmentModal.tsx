@@ -25,7 +25,7 @@ export const AppointmentModal = ({ trigger, variant = "default", size = "default
   const [form, setForm] = useState({ name: "", phone: "", department: defaultDepartment || "", date: "", time: "" });
   const [confirmation, setConfirmation] = useState<{ id: string; date: string; time: string; doctor: string } | null>(null);
 
-  const onSubmit = (e: React.FormEvent) => {
+  const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name || !form.phone || !form.department || !form.date || !form.time) {
       toast.error("Please fill out all fields");
@@ -34,7 +34,7 @@ export const AppointmentModal = ({ trigger, variant = "default", size = "default
     
     const assignedDoctor = defaultDoctor || (form.department === "Gynecology" ? "Dr. Anjali Verma" : "Dr. Rajeev Kumar");
     
-    const id = addAppointment({
+    const id = await addAppointment({
       patientName: form.name,
       phone: form.phone,
       department: form.department as any,
