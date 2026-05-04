@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { NavLink, Link } from "react-router-dom";
+import { NavLink, Link, useLocation } from "react-router-dom";
 import { Menu, X, HeartPulse, ShieldCheck } from "lucide-react";
 import { AppointmentModal } from "@/components/AppointmentModal";
 import { cn } from "@/lib/utils";
+import { useHospital } from "../../admin/context/HospitalContext";
 
 const links = [
   { to: "/", label: "Home" },
@@ -16,8 +17,18 @@ const links = [
 
 export const Navbar = () => {
   const [open, setOpen] = useState(false);
+  const { info } = useHospital();
+  const location = useLocation();
+  const isAdmin = location.pathname.startsWith('/admin');
+
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-border/50 bg-background/80 backdrop-blur-lg">
+    <>
+      {!isAdmin && (
+        <div className="bg-red-600 text-white text-xs sm:text-sm font-semibold py-2 px-4 text-center">
+          🚨 24/7 Emergency: {info.phone} | {info.name}, Sasaram
+        </div>
+      )}
+      <header className="sticky top-0 z-40 w-full border-b border-border/50 bg-background/80 backdrop-blur-lg">
       <div className="container flex h-16 items-center justify-between">
         <Link to="/" className="flex items-center gap-2 font-display text-xl font-bold text-primary-deep">
           <span className="grid h-9 w-9 place-items-center rounded-xl gradient-primary text-primary-foreground shadow-soft">
@@ -84,6 +95,7 @@ export const Navbar = () => {
           </nav>
         </div>
       )}
-    </header>
+      </header>
+    </>
   );
 };

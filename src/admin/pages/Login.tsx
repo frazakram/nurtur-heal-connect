@@ -16,10 +16,10 @@ const Login = () => {
 
   useEffect(() => { if (user) nav("/admin/dashboard", { replace: true }); }, [user, nav]);
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    const res = login(email, password);
+    const res = await login(email, password);
     setLoading(false);
     if (!res.ok) { toast.error(res.error ?? "Login failed"); return; }
     toast.success(`Welcome, ${res.user!.name}`);
@@ -65,7 +65,10 @@ const Login = () => {
           </form>
 
           <div className="mt-8 rounded-xl border border-border bg-secondary/40 p-4">
-            <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Demo credentials</div>
+            <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Note on Auth</div>
+            <div className="text-xs text-muted-foreground mb-4">
+              Now using Supabase Auth. You must create these users in your Supabase Auth dashboard with appropriate metadata.role ("admin", "receptionist", "assistant") to login.
+            </div>
             <div className="space-y-1.5 text-sm">
               {[
                 { r: "Admin", e: "admin@carehospital.in", p: "admin123" },

@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import { storage } from "../utils/storage";
+import { supabase } from "../../lib/supabase";
 
 export type Role = "admin" | "receptionist" | "assistant";
 
@@ -9,42 +9,64 @@ export interface AuthUser {
   role: Role;
 }
 
-const CREDS: Record<string, { password: string; user: AuthUser }> = {
-  "admin@carehospital.in": { password: "admin123", user: { email: "admin@carehospital.in", name: "Dr. Admin", role: "admin" } },
-  "reception@carehospital.in": { password: "recep123", user: { email: "reception@carehospital.in", name: "Reception Desk", role: "receptionist" } },
-  "assistant@carehospital.in": { password: "assist123", user: { email: "assistant@carehospital.in", name: "Medical Assistant", role: "assistant" } },
-};
-
 interface AuthCtx {
   user: AuthUser | null;
-  login: (email: string, password: string) => { ok: boolean; error?: string; user?: AuthUser };
-  logout: () => void;
+  loading: boolean;
+  login: (email: string, password: string) => Promise<{ ok: boolean; error?: string; user?: AuthUser }>;
+  logout: () => Promise<void>;
 }
 
 const Ctx = createContext<AuthCtx | null>(null);
-const KEY = "ch_auth_user";
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setUser(storage.get<AuthUser | null>(KEY, null));
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        setUser({
+          email: session.user.email || "",
+          name: session.user.user_metadata?.name || session.user.email?.split("@")[0] || "User",
+          role: (session.user.user_metadata?.role as Role) || "admin"
+        });
+      }
+      setLoading(false);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) {
+        setUser({
+          email: session.user.email || "",
+          name: session.user.user_metadata?.name || session.user.email?.split("@")[0] || "User",
+          role: (session.user.user_metadata?.role as Role) || "admin"
+        });
+      } else {
+        setUser(null);
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
-  const login = (email: string, password: string) => {
-    const entry = CREDS[email.trim().toLowerCase()];
-    if (!entry || entry.password !== password) return { ok: false, error: "Invalid email or password" };
-    storage.set(KEY, entry.user);
-    setUser(entry.user);
-    return { ok: true, user: entry.user };
+  const login = async (email: string, password: string) => {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) return { ok: false, error: error.message };
+    const authUser: AuthUser = {
+      email: data.user.email || "",
+      name: data.user.user_metadata?.name || data.user.email?.split("@")[0] || "User",
+      role: (data.user.user_metadata?.role as Role) || "admin"
+    };
+    setUser(authUser);
+    return { ok: true, user: authUser };
   };
 
-  const logout = () => {
-    storage.remove(KEY);
+  const logout = async () => {
+    await supabase.auth.signOut();
     setUser(null);
   };
 
-  return <Ctx.Provider value={{ user, login, logout }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ user, loading, login, logout }}>{children}</Ctx.Provider>;
 };
 
 export const useAuth = () => {

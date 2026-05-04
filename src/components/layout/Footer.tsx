@@ -1,7 +1,11 @@
 import { Link } from "react-router-dom";
 import { Facebook, Instagram, MessageCircle, MapPin, Phone, Mail, HeartPulse } from "lucide-react";
+import { useHospital } from "../../admin/context/HospitalContext";
 
-export const Footer = () => (
+export const Footer = () => {
+  const { info } = useHospital();
+  
+  return (
   <footer className="mt-20 border-t border-border bg-primary-soft/40">
     <div className="container py-14 grid gap-10 md:grid-cols-4">
       <div>
@@ -37,14 +41,14 @@ export const Footer = () => (
       <div>
         <h4 className="font-display font-semibold text-primary-deep mb-4">Contact</h4>
         <ul className="space-y-3 text-sm text-muted-foreground">
-          <li className="flex gap-2"><MapPin className="h-4 w-4 mt-0.5 shrink-0 text-primary" /> Mohalla - Daira, Near Fruit Market, Sasaram, Rohtas, Bihar - 821115</li>
-          <li className="flex gap-2"><Phone className="h-4 w-4 mt-0.5 text-primary" /> +91 XXXXXXXXXX</li>
-          <li className="flex gap-2"><Mail className="h-4 w-4 mt-0.5 text-primary" /> care@carehospital.in</li>
+          <li className="flex gap-2"><MapPin className="h-4 w-4 mt-0.5 shrink-0 text-primary" /> {info.address}</li>
+          <li className="flex gap-2"><Phone className="h-4 w-4 mt-0.5 text-primary" /> {info.phone}</li>
+          <li className="flex gap-2"><Mail className="h-4 w-4 mt-0.5 text-primary" /> {info.email}</li>
         </ul>
         <div className="flex gap-3 mt-4">
           <a href="#" aria-label="Facebook" className="grid h-9 w-9 place-items-center rounded-full bg-background hover:bg-primary hover:text-primary-foreground transition-colors"><Facebook className="h-4 w-4" /></a>
           <a href="#" aria-label="Instagram" className="grid h-9 w-9 place-items-center rounded-full bg-background hover:bg-gyn-strong hover:text-primary-foreground transition-colors"><Instagram className="h-4 w-4" /></a>
-          <a href="https://wa.me/910000000000" aria-label="WhatsApp" className="grid h-9 w-9 place-items-center rounded-full bg-background hover:bg-green-500 hover:text-white transition-colors"><MessageCircle className="h-4 w-4" /></a>
+          <a href={`https://wa.me/${info.phone.replace(/[^0-9]/g, '')}`} aria-label="WhatsApp" className="grid h-9 w-9 place-items-center rounded-full bg-background hover:bg-green-500 hover:text-white transition-colors"><MessageCircle className="h-4 w-4" /></a>
         </div>
       </div>
     </div>
@@ -52,4 +56,5 @@ export const Footer = () => (
       © {new Date().getFullYear()} Care Hospital, Sasaram. All rights reserved.
     </div>
   </footer>
-);
+  );
+};

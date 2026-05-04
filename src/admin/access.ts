@@ -11,6 +11,8 @@ export const PAGE_ACCESS: Record<string, Role[]> = {
   inventory: ["admin", "assistant"],
   reports: ["admin"],
   settings: ["admin"],
+  blogPosts: ["admin"],
+  messages: ["admin", "receptionist"],
 };
 
 export const can = (role: Role | undefined, page: string) =>
