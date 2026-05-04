@@ -41,7 +41,7 @@ export const Footer = () => {
       <div>
         <h4 className="font-display font-semibold text-primary-deep mb-4">Contact</h4>
         <ul className="space-y-3 text-sm text-muted-foreground">
-          <li className="flex gap-2"><MapPin className="h-4 w-4 mt-0.5 shrink-0 text-primary" /> {info.address}</li>
+          <li className="flex gap-2"><MapPin className="h-4 w-4 mt-0.5 shrink-0 text-primary" /> <a href="https://maps.app.goo.gl/bAiEYqUnBcZDYsok9" target="_blank" rel="noreferrer" className="hover:text-primary hover:underline">{info.address}</a></li>
           <li className="flex gap-2"><Phone className="h-4 w-4 mt-0.5 text-primary" /> {info.phone}</li>
           <li className="flex gap-2"><Mail className="h-4 w-4 mt-0.5 text-primary" /> {info.email}</li>
         </ul>
