@@ -53,7 +53,11 @@ const Contact = () => {
             <div className="flex gap-3"><MapPin className="h-5 w-5 text-primary mt-1 shrink-0" />
               <div>
                 <div className="font-semibold text-primary-deep">Address</div>
-                <p className="text-sm text-muted-foreground mt-1">{info.address}</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  <a href="https://maps.app.goo.gl/bAiEYqUnBcZDYsok9" target="_blank" rel="noreferrer" className="hover:text-primary hover:underline">
+                    {info.address}
+                  </a>
+                </p>
               </div>
             </div>
           </div>
