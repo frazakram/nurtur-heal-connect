@@ -24,7 +24,10 @@ export type BillStatus = "Paid" | "Pending" | "Partial";
 export type PayMode = "Cash" | "UPI" | "Card" | "Insurance";
 export interface Bill { id: string; patientId: string; patientName: string; department: Department; date: string; items: BillItem[]; total: number; status: BillStatus; payMode: PayMode; }
 export interface InventoryItem { id: string; name: string; category: "Medicine" | "Equipment" | "Consumable"; quantity: number; unit: string; reorderLevel: number; updatedAt: string; }
-export interface DoctorProfile { id: string; name: string; role: string; qualification: string; experience: string; bio?: string; languages?: string[]; img: string; accent: "gyn" | "peds"; }
+export type DayKey = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
+export type DaySchedule = { morning: boolean; evening: boolean };
+export type WeekSchedule = Record<DayKey, DaySchedule>;
+export interface DoctorProfile { id: string; name: string; role: string; qualification: string; experience: string; bio?: string; languages?: string[]; img: string; accent: "gyn" | "peds"; precautions?: string; schedule?: WeekSchedule | null; }
 export interface Testimonial { id: string; name: string; text: string; role: string; }
 export interface BlogPost { id: string; title: string; date: string; excerpt: string; content: string; img: string; accent: "gyn" | "peds" | "primary"; author?: string; published?: boolean; }
 export interface StatItem { id: string; value: string; label: string; }
@@ -84,7 +87,7 @@ const HospitalCtx = createContext<Ctx | null>(null);
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 
-const DEFAULT_INFO: HospitalInfo = { name: "Care Hospital", address: "Mohalla - Daira, Near Fruit Market, Sasaram, District - Rohtas, Bihar - 821115", phone: "+91 0000000000", email: "care@carehospital.in" };
+const DEFAULT_INFO: HospitalInfo = { name: "Care Hospital", address: "Mohalla - Daira, Near Fruit Market, Sasaram, District - Rohtas, Bihar - 821115", phone: "9001118162", email: "care@carehospital.in" };
 const DEFAULT_MODULES: Record<string, boolean> = { patients: true, appointments: true, beds: true, staff: true, expenses: true, billing: true, inventory: true, reports: true, settings: true, blogPosts: true, messages: true, dashboard: true };
 const DEFAULT_TESTIMONIALS: Testimonial[] = [
   { id: uid(), name: "Priya S.", text: "The maternity care was exceptional. The team was kind, attentive, and made me feel safe throughout my pregnancy.", role: "New mother" },

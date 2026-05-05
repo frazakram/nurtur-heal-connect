@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Navbar } from "./Navbar";
 import { Footer } from "./Footer";
 import { WhatsAppButton } from "./WhatsAppButton";
+import { AppointmentBot } from "../AppointmentBot";
 
 export const Layout = () => {
   const location = useLocation();
@@ -23,6 +24,7 @@ export const Layout = () => {
       </AnimatePresence>
       <Footer />
       <WhatsAppButton />
+      <AppointmentBot />
     </div>
   );
 };

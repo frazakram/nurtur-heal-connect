@@ -144,3 +144,24 @@ All colors MUST be HSL.
   .shadow-card { box-shadow: var(--shadow-card); }
   .shadow-glow { box-shadow: var(--shadow-glow); }
 }
+
+@media print {
+  @page { margin: 1.5cm; size: A4; }
+
+  body { background: white !important; color: black !important; }
+
+  /* Hide everything except the main content */
+  .print\:hidden { display: none !important; }
+
+  /* Make charts readable on print */
+  .recharts-wrapper svg { width: 100% !important; }
+
+  /* Remove shadows and borders that don't print well */
+  .shadow-card, .shadow-soft, .shadow-glow { box-shadow: none !important; }
+
+  /* Ensure full-width layout when sidebar is hidden */
+  main { padding: 0 !important; width: 100% !important; }
+
+  /* Page break hints for long content */
+  .rounded-2xl { break-inside: avoid; }
+}

@@ -7,14 +7,18 @@ import { SEO } from "@/components/SEO";
 import { useHospital } from "../admin/context/HospitalContext";
 
 const Blog = () => {
-  const { blogPosts } = useHospital();
+  const { blogPosts, doctors } = useHospital();
   const [filter, setFilter] = useState<"all" | "gyn" | "peds" | "primary">("all");
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  
+
   const filteredPosts = blogPosts.filter(p => p.published !== false && (filter === "all" || p.accent === filter));
   const expandedPost = blogPosts.find(p => p.id === expandedId);
 
-  const getAuthor = (accent: string) => accent === 'gyn' ? "Dr. Anjali Verma" : accent === 'peds' ? "Dr. Rajeev Kumar" : "Care Hospital Editorial";
+  const getAuthor = (accent: string) => {
+    if (accent === 'gyn') return doctors.find(d => d.department === 'Gynecology')?.name ?? "Care Hospital";
+    if (accent === 'peds') return doctors.find(d => d.department === 'Pediatrics')?.name ?? "Care Hospital";
+    return "Care Hospital Editorial";
+  };
   const getReadTime = (content: string) => Math.max(1, Math.ceil(content.split(" ").length / 200)) + " min read";
 
   return (

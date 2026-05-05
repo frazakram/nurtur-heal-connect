@@ -49,6 +49,21 @@ const Expenses = () => {
     });
   }, [monthly, month]);
 
+  const exportCSV = () => {
+    const rows = [
+      ["Date", "Category", "Description", "Paid By", "Amount (INR)", "Receipt Note"],
+      ...expenses.map((e) => [e.date, e.category, e.description, e.paidBy, e.amount, e.receiptNote || ""]),
+    ];
+    const csv = rows.map((r) => r.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `expenses-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (form.amount <= 0) { toast.error("Amount must be positive"); return; }
@@ -62,7 +77,7 @@ const Expenses = () => {
       <PageHeader title="Expenses" subtitle="Track daily and monthly hospital expenses."
         actions={
           <>
-            <Button variant="outline" onClick={() => toast.success("Export to CSV (demo)")}><Download className="h-4 w-4 mr-1.5" />Export</Button>
+            <Button variant="outline" onClick={exportCSV}><Download className="h-4 w-4 mr-1.5" />Export CSV</Button>
             <Button onClick={() => setOpen(true)}><Plus className="h-4 w-4 mr-1.5" />Add Expense</Button>
           </>
         }

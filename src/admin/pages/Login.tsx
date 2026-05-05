@@ -26,8 +26,6 @@ const Login = () => {
     nav("/admin/dashboard", { replace: true });
   };
 
-  const fill = (e: string, p: string) => { setEmail(e); setPassword(p); };
-
   return (
     <div className="min-h-screen grid lg:grid-cols-2 bg-background">
       <div className="hidden lg:flex relative gradient-primary text-primary-foreground p-12 flex-col justify-between overflow-hidden">
@@ -64,25 +62,6 @@ const Login = () => {
             <Button type="submit" size="lg" className="w-full" disabled={loading}>{loading ? "Signing in…" : "Sign In"}</Button>
           </form>
 
-          <div className="mt-8 rounded-xl border border-border bg-secondary/40 p-4">
-            <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Note on Auth</div>
-            <div className="text-xs text-muted-foreground mb-4">
-              Now using Supabase Auth. You must create these users in your Supabase Auth dashboard with appropriate metadata.role ("admin", "receptionist", "assistant") to login.
-            </div>
-            <div className="space-y-1.5 text-sm">
-              {[
-                { r: "Admin", e: "admin@carehospital.in", p: "admin123" },
-                { r: "Receptionist", e: "reception@carehospital.in", p: "recep123" },
-                { r: "Med. Assistant", e: "assistant@carehospital.in", p: "assist123" },
-              ].map((c) => (
-                <button key={c.e} type="button" onClick={() => fill(c.e, c.p)}
-                  className="w-full text-left flex justify-between items-center rounded-lg px-3 py-2 hover:bg-background transition-colors">
-                  <span className="font-medium text-primary-deep">{c.r}</span>
-                  <span className="text-xs text-muted-foreground">{c.e}</span>
-                </button>
-              ))}
-            </div>
-          </div>
         </div>
       </div>
     </div>
