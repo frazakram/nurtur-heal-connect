@@ -2,8 +2,11 @@ import { motion } from "framer-motion";
 import { GraduationCap, Briefcase } from "lucide-react";
 import { AppointmentModal } from "@/components/AppointmentModal";
 import { SEO } from "@/components/SEO";
-
 import { useHospital } from "../admin/context/HospitalContext";
+import type { DayKey, WeekSchedule } from "../admin/context/HospitalContext";
+
+const DAYS: DayKey[] = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+const DAY_LABEL: Record<DayKey, string> = { mon: "Mo", tue: "Tu", wed: "We", thu: "Th", fri: "Fr", sat: "Sa", sun: "Su" };
 
 const Doctors = () => {
   const { doctors } = useHospital();
@@ -44,6 +47,27 @@ const Doctors = () => {
                       {lang}
                     </span>
                   ))}
+                </div>
+              )}
+              {d.schedule && (
+                <div className="mt-4 pt-4 border-t border-border">
+                  <p className="text-xs font-semibold text-primary-deep mb-2 text-left">OPD Availability</p>
+                  <div className="grid grid-cols-7 gap-0.5">
+                    {DAYS.map(day => {
+                      const s = (d.schedule as WeekSchedule)[day];
+                      return (
+                        <div key={day} className="flex flex-col items-center gap-0.5">
+                          <span className="text-[10px] font-medium text-muted-foreground">{DAY_LABEL[day]}</span>
+                          <div title="Morning" className={`h-1.5 w-full rounded-sm ${s?.morning ? (d.accent === "gyn" ? "bg-pink-400" : "bg-sky-400") : "bg-border"}`} />
+                          <div title="Evening" className={`h-1.5 w-full rounded-sm ${s?.evening ? (d.accent === "gyn" ? "bg-pink-600" : "bg-sky-600") : "bg-border"}`} />
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="mt-1.5 flex gap-3 text-[10px] text-muted-foreground">
+                    <span className="flex items-center gap-1"><span className="inline-block h-1.5 w-3 rounded-sm bg-foreground/20" />Morning</span>
+                    <span className="flex items-center gap-1"><span className="inline-block h-1.5 w-3 rounded-sm bg-foreground/50" />Evening</span>
+                  </div>
                 </div>
               )}
               <div className="mt-6">

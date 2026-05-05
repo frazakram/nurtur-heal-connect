@@ -65,12 +65,12 @@ const Contact = () => {
             <div className="rounded-2xl bg-background border border-border p-6 shadow-card">
               <Phone className="h-5 w-5 text-primary" />
               <div className="font-semibold text-primary-deep mt-2">Phone</div>
-              <p className="text-sm text-muted-foreground">{info.phone}</p>
+              <a href={`tel:${info.phone.replace(/[^0-9+]/g, '')}`} className="text-sm text-muted-foreground hover:text-primary hover:underline">{info.phone}</a>
             </div>
             <div className="rounded-2xl bg-background border border-border p-6 shadow-card">
               <Mail className="h-5 w-5 text-primary" />
               <div className="font-semibold text-primary-deep mt-2">Email</div>
-              <p className="text-sm text-muted-foreground">{info.email}</p>
+              <a href={`mailto:${info.email}`} className="text-sm text-muted-foreground hover:text-primary hover:underline break-all">{info.email}</a>
             </div>
           </div>
           

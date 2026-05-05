@@ -125,7 +125,7 @@ export const AppointmentModal = ({ trigger, variant = "default", size = "default
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="ap-date">Date</Label>
-                  <Input id="ap-date" type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
+                  <Input id="ap-date" type="date" value={form.date} min={new Date().toISOString().slice(0, 10)} onChange={(e) => setForm({ ...form, date: e.target.value })} />
                 </div>
               </div>
               <div className="space-y-2">

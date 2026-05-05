@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../../lib/supabase";
-import { Check, Trash2, MailOpen, Mail } from "lucide-react";
+import { Trash2, MailOpen, Mail } from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
 import { DataTable, Column } from "../components/DataTable";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { fmtDate } from "../utils/formatters";
@@ -21,6 +22,7 @@ interface Message {
 const Messages = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [viewMsg, setViewMsg] = useState<Message | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   useEffect(() => {
     loadMessages();
@@ -44,14 +46,12 @@ const Messages = () => {
   };
 
   const deleteMessage = async (id: string) => {
-    if (confirm("Are you sure you want to delete this message?")) {
-      const { error } = await supabase.from('messages').delete().eq('id', id);
-      if (!error) {
-        setMessages(messages.filter(m => m.id !== id));
-        toast.success("Message deleted");
-      } else {
-        toast.error("Failed to delete message");
-      }
+    const { error } = await supabase.from('messages').delete().eq('id', id);
+    if (!error) {
+      setMessages(messages.filter(m => m.id !== id));
+      toast.success("Message deleted");
+    } else {
+      toast.error("Failed to delete message");
     }
   };
 
@@ -81,7 +81,7 @@ const Messages = () => {
         <Button size="icon" variant="ghost" onClick={() => toggleRead(r.id, !!r.read)} title={r.read ? "Mark as unread" : "Mark as read"}>
           {r.read ? <Mail className="h-4 w-4" /> : <MailOpen className="h-4 w-4" />}
         </Button>
-        <Button size="icon" variant="ghost" onClick={() => deleteMessage(r.id)}>
+        <Button size="icon" variant="ghost" onClick={() => setConfirmDeleteId(r.id)}>
           <Trash2 className="h-4 w-4 text-destructive" />
         </Button>
       </div>
@@ -94,6 +94,10 @@ const Messages = () => {
       <div className="rounded-xl bg-background border border-border shadow-sm overflow-hidden">
         <DataTable columns={cols} data={messages} />
       </div>
+
+      <ConfirmDialog open={!!confirmDeleteId} title="Delete message?" description="This will permanently remove this message."
+        onClose={() => setConfirmDeleteId(null)}
+        onConfirm={() => { if (confirmDeleteId) deleteMessage(confirmDeleteId); }} />
 
       <Dialog open={!!viewMsg} onOpenChange={(v) => !v && setViewMsg(null)}>
         <DialogContent className="sm:max-w-lg">

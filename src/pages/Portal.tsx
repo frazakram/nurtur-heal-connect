@@ -90,7 +90,8 @@ const Portal = () => {
     toast.success("Logged out");
   };
 
-  const myAppointments = appointments.filter(a => user && a.phone === user.phone);
+  const normalizePhone = (p: string) => p.replace(/[^0-9]/g, "");
+  const myAppointments = appointments.filter(a => user && normalizePhone(a.phone) === normalizePhone(user.phone));
 
   return (
     <>

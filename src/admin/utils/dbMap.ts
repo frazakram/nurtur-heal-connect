@@ -12,7 +12,8 @@ export const accentToCat = (a: string): string =>
 export const mapDoctor = (r: any) => ({
   id: r.id, name: r.name, role: r.role || "", qualification: r.qualification || "",
   experience: r.experience || "", bio: r.bio || "", languages: r.languages || [],
-  img: r.photo || "", accent: deptToAccent(r.department),
+  img: r.photo || "", accent: deptToAccent(r.department), precautions: r.precautions || "",
+  schedule: r.schedule ?? null,
 });
 export const unmapDoctor = (d: any) => {
   const o: any = {};
@@ -24,6 +25,8 @@ export const unmapDoctor = (d: any) => {
   if (d.languages !== undefined) o.languages = d.languages;
   if (d.img !== undefined) o.photo = d.img;
   if (d.accent !== undefined) o.department = accentToDept(d.accent);
+  if (d.precautions !== undefined) o.precautions = d.precautions;
+  if (d.schedule !== undefined) o.schedule = d.schedule;
   return o;
 };
 

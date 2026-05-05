@@ -7,6 +7,13 @@ import { useHospital } from "../context/HospitalContext";
 import { inr, monthKey, todayISO } from "../utils/formatters";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
+const printReport = () => {
+  const prev = document.title;
+  document.title = `Care-Hospital-Report-${new Date().toISOString().slice(0, 10)}`;
+  window.print();
+  document.title = prev;
+};
+
 const Reports = () => {
   const { patients, beds, bills, expenses } = useHospital();
   const month = monthKey(todayISO());
@@ -40,7 +47,7 @@ const Reports = () => {
   return (
     <>
       <PageHeader title="Reports" subtitle="Hospital performance summary."
-        actions={<Button onClick={() => window.print()}><Printer className="h-4 w-4 mr-1.5" />Generate Report</Button>} />
+        actions={<Button onClick={printReport}><Printer className="h-4 w-4 mr-1.5" />Print / Save PDF</Button>} />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="OPD Patients" value={opd} icon={Users} tone="primary" />
