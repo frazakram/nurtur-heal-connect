@@ -13,6 +13,7 @@ export const PAGE_ACCESS: Record<string, Role[]> = {
   settings: ["admin"],
   blogPosts: ["admin"],
   messages: ["admin", "receptionist"],
+  followups: ["admin", "receptionist"],
 };
 
 export const can = (role: Role | undefined, page: string) =>
