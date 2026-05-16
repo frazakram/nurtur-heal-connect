@@ -1,13 +1,15 @@
-import { useState } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { CalendarHeart, CheckCircle2 } from "lucide-react";
-import { useHospital } from "../admin/context/HospitalContext";
+import { CalendarHeart, CheckCircle2, Loader2 } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { useHospital, type Department } from "../admin/context/HospitalContext";
 import { fmtDate } from "../admin/utils/formatters";
+import { getAvailableSlots, label12 } from "@/lib/slots";
 
 interface Props {
   trigger?: React.ReactNode;
@@ -20,10 +22,38 @@ interface Props {
 }
 
 export const AppointmentModal = ({ trigger, variant = "default", size = "default", className, label = "Book Appointment", defaultDoctor, defaultDepartment }: Props) => {
-  const { addAppointment } = useHospital();
+  const { addAppointment, doctors } = useHospital();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ name: "", phone: "", department: defaultDepartment || "", date: "", time: "" });
+  const [slots, setSlots] = useState<string[]>([]);
+  const [loadingSlots, setLoadingSlots] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [confirmation, setConfirmation] = useState<{ id: string; date: string; time: string; doctor: string } | null>(null);
+
+  // Resolve the actual doctor: explicit prop wins, else first doctor of the
+  // chosen department. We need a concrete doctor to show real availability.
+  const doctor = useMemo(() => {
+    if (defaultDoctor) return doctors.find((d) => d.name === defaultDoctor);
+    if (form.department) {
+      const accent = form.department === "Gynecology" ? "gyn" : "peds";
+      return doctors.find((d) => d.accent === accent);
+    }
+    return undefined;
+  }, [doctors, defaultDoctor, form.department]);
+
+  const loadSlots = useCallback(async () => {
+    if (!doctor || !form.date) { setSlots([]); return; }
+    setLoadingSlots(true);
+    const available = await getAvailableSlots(doctor.id, form.date, doctor.schedule);
+    setSlots(available);
+    setLoadingSlots(false);
+  }, [doctor, form.date]);
+
+  useEffect(() => {
+    if (!open) return;
+    setForm((f) => ({ ...f, time: "" }));
+    loadSlots();
+  }, [open, doctor, form.date, loadSlots]);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,32 +61,47 @@ export const AppointmentModal = ({ trigger, variant = "default", size = "default
       toast.error("Please fill out all fields");
       return;
     }
-    
-    const assignedDoctor = defaultDoctor || (form.department === "Gynecology" ? "Dr. Mahera Erum" : "Dr. Irfan Anwar");
-    
+    if (!doctor) {
+      toast.error("No doctor is available for this department yet. Please call us to book.");
+      return;
+    }
+
+    setSubmitting(true);
     const id = await addAppointment({
       patientName: form.name,
       phone: form.phone,
-      department: form.department as any,
-      doctor: assignedDoctor,
+      department: form.department as Department,
+      doctor: doctor.name,
       date: form.date,
-      time: form.time
+      time: form.time,
     });
+    setSubmitting(false);
+
+    if (!id) {
+      // Most likely the slot was taken between viewing and submitting
+      // (DB unique index rejected it). Refresh and let them re-pick.
+      toast.error("That slot was just taken. Please choose another time.");
+      setForm((f) => ({ ...f, time: "" }));
+      loadSlots();
+      return;
+    }
 
     toast.success("Appointment booked successfully!");
-    setConfirmation({ id, date: form.date, time: form.time, doctor: assignedDoctor });
+    setConfirmation({ id, date: form.date, time: form.time, doctor: doctor.name });
   };
 
   const handleOpenChange = (v: boolean) => {
     setOpen(v);
     if (!v) {
-      // Reset after closing
       setTimeout(() => {
         setForm({ name: "", phone: "", department: defaultDepartment || "", date: "", time: "" });
+        setSlots([]);
         setConfirmation(null);
       }, 300);
     }
   };
+
+  const today = new Date().toISOString().slice(0, 10);
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -92,7 +137,7 @@ export const AppointmentModal = ({ trigger, variant = "default", size = "default
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Time:</span>
-                <span className="font-medium">{confirmation.time}</span>
+                <span className="font-medium">{label12(confirmation.time)}</span>
               </div>
             </div>
             <Button onClick={() => handleOpenChange(false)} className="w-full">Done</Button>
@@ -101,7 +146,7 @@ export const AppointmentModal = ({ trigger, variant = "default", size = "default
           <>
             <DialogHeader>
               <DialogTitle className="font-display text-2xl">Book an Appointment</DialogTitle>
-              <DialogDescription>We'll get back to you within a few hours.</DialogDescription>
+              <DialogDescription>Pick a date to see live availability — only free slots are shown.</DialogDescription>
             </DialogHeader>
             <form onSubmit={onSubmit} className="space-y-4">
               <div className="space-y-2">
@@ -115,7 +160,7 @@ export const AppointmentModal = ({ trigger, variant = "default", size = "default
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label>Department</Label>
-                  <Select value={form.department} onValueChange={(v) => setForm({ ...form, department: v })}>
+                  <Select value={form.department} onValueChange={(v) => setForm({ ...form, department: v, time: "" })} disabled={!!defaultDoctor}>
                     <SelectTrigger><SelectValue placeholder="Select specialty" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Gynecology">Gynecology</SelectItem>
@@ -125,42 +170,57 @@ export const AppointmentModal = ({ trigger, variant = "default", size = "default
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="ap-date">Date</Label>
-                  <Input id="ap-date" type="date" value={form.date} min={new Date().toISOString().slice(0, 10)} onChange={(e) => setForm({ ...form, date: e.target.value })} />
+                  <Input id="ap-date" type="date" value={form.date} min={today} onChange={(e) => setForm({ ...form, date: e.target.value, time: "" })} />
                 </div>
               </div>
+
+              {doctor && (
+                <p className="text-xs text-muted-foreground">
+                  You'll be booked with <span className="font-semibold text-primary-deep">{doctor.name}</span>
+                  {doctor.role ? ` · ${doctor.role}` : ""}
+                </p>
+              )}
+
               <div className="space-y-2">
-                <Label>Time Slot</Label>
-                <Select value={form.time} onValueChange={(v) => setForm({ ...form, time: v })}>
-                  <SelectTrigger><SelectValue placeholder="Select time" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      <SelectLabel>Morning</SelectLabel>
-                      <SelectItem value="09:00 AM">09:00 AM</SelectItem>
-                      <SelectItem value="09:30 AM">09:30 AM</SelectItem>
-                      <SelectItem value="10:00 AM">10:00 AM</SelectItem>
-                      <SelectItem value="10:30 AM">10:30 AM</SelectItem>
-                      <SelectItem value="11:00 AM">11:00 AM</SelectItem>
-                      <SelectItem value="11:30 AM">11:30 AM</SelectItem>
-                      <SelectItem value="12:00 PM">12:00 PM</SelectItem>
-                      <SelectItem value="12:30 PM">12:30 PM</SelectItem>
-                      <SelectItem value="01:00 PM">01:00 PM</SelectItem>
-                    </SelectGroup>
-                    <SelectGroup>
-                      <SelectLabel>Evening</SelectLabel>
-                      <SelectItem value="04:00 PM">04:00 PM</SelectItem>
-                      <SelectItem value="04:30 PM">04:30 PM</SelectItem>
-                      <SelectItem value="05:00 PM">05:00 PM</SelectItem>
-                      <SelectItem value="05:30 PM">05:30 PM</SelectItem>
-                      <SelectItem value="06:00 PM">06:00 PM</SelectItem>
-                      <SelectItem value="06:30 PM">06:30 PM</SelectItem>
-                      <SelectItem value="07:00 PM">07:00 PM</SelectItem>
-                      <SelectItem value="07:30 PM">07:30 PM</SelectItem>
-                      <SelectItem value="08:00 PM">08:00 PM</SelectItem>
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
+                <Label>Available Time Slots</Label>
+                <div className="rounded-xl border border-border p-3 min-h-[84px]">
+                  {!doctor ? (
+                    <p className="text-sm text-muted-foreground text-center py-4">Select a department to see availability.</p>
+                  ) : !form.date ? (
+                    <p className="text-sm text-muted-foreground text-center py-4">Pick a date to see available times.</p>
+                  ) : loadingSlots ? (
+                    <div className="flex items-center justify-center gap-2 py-4 text-sm text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" /> Checking availability…
+                    </div>
+                  ) : slots.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-4">
+                      No free slots for {doctor.name} on this date. Please try another date.
+                    </p>
+                  ) : (
+                    <div className="grid grid-cols-3 gap-2">
+                      {slots.map((s) => (
+                        <button
+                          key={s}
+                          type="button"
+                          onClick={() => setForm({ ...form, time: s })}
+                          className={cn(
+                            "rounded-lg border text-xs font-semibold py-2 transition-colors",
+                            form.time === s
+                              ? "bg-primary text-white border-primary"
+                              : "border-border hover:border-primary hover:bg-primary-soft/40",
+                          )}
+                        >
+                          {label12(s)}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
-              <Button type="submit" className="w-full" size="lg">Request Appointment</Button>
+
+              <Button type="submit" className="w-full" size="lg" disabled={submitting || !form.time}>
+                {submitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Booking…</> : "Confirm Appointment"}
+              </Button>
             </form>
           </>
         )}

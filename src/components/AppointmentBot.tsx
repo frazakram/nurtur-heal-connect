@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { MessageSquare, X, Send, Mic, MicOff } from "lucide-react";
 import { supabase } from "../lib/supabase";
+import { getAvailableSlots, scheduledSlots } from "../lib/slots";
 import { useHospital } from "../admin/context/HospitalContext";
 
 type Step =
@@ -14,11 +15,6 @@ interface BookingForm {
   firstName: string; lastName: string; email: string; phone: string;
   doctorId: string; doctorName: string; department: string; date: string; time: string;
 }
-
-const ALL_SLOTS = [
-  "09:00","09:30","10:00","10:30","11:00","11:30","12:00","12:30",
-  "16:00","16:30","17:00","17:30","18:00","18:30",
-];
 
 const fmtTime = (t: string) => {
   const [h, m] = t.split(":").map(Number);
@@ -222,22 +218,10 @@ export const AppointmentBot = () => {
   // ── fetch slots ───────────────────────────────────────────────────────────
   const fetchSlots = async (doctorId: string, date: string) => {
     setLoadingSlots(true);
-    const { data } = await supabase
-      .from("appointments").select("time")
-      .eq("doctor_id", doctorId).eq("date", date).eq("status", "Scheduled");
+    const schedule = doctors.find(d => d.id === doctorId)?.schedule ?? null;
+    const available = await getAvailableSlots(doctorId, date, schedule);
     setLoadingSlots(false);
-    const booked = new Set((data || []).map((a: any) => a.time));
-    const now = new Date();
-    const isToday = date === todayISO();
-    return ALL_SLOTS.filter(slot => {
-      if (booked.has(slot)) return false;
-      if (isToday) {
-        const [h, m] = slot.split(":").map(Number);
-        const st = new Date(); st.setHours(h, m, 0, 0);
-        return st > now;
-      }
-      return true;
-    });
+    return available;
   };
 
   // ── confirm booking ───────────────────────────────────────────────────────
@@ -355,12 +339,16 @@ export const AppointmentBot = () => {
     setStep("confirm");
   };
 
-  // ── date grid ─────────────────────────────────────────────────────────────
+  // ── date grid (only days the selected doctor actually works) ──────────────
+  const selectedSchedule = doctors.find(d => d.id === form.doctorId)?.schedule ?? null;
   const dateOptions: string[] = [];
-  const today = new Date();
-  for (let i = 0; i < 35 && dateOptions.length < 28; i++) {
-    const d = new Date(today); d.setDate(today.getDate() + i);
-    if (d.getDay() !== 0) dateOptions.push(d.toISOString().slice(0, 10));
+  {
+    const base = new Date();
+    for (let i = 0; i < 60 && dateOptions.length < 28; i++) {
+      const d = new Date(base); d.setDate(base.getDate() + i);
+      const iso = d.toISOString().slice(0, 10);
+      if (scheduledSlots(selectedSchedule, iso).length > 0) dateOptions.push(iso);
+    }
   }
 
   const isTextStep = ["firstName", "lastName", "email", "phone"].includes(step);
