@@ -1,13 +1,17 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
-import { CalendarCheck, FileText, History, Pill, LogOut } from "lucide-react";
+import { CalendarCheck, FileText, History, Pill, LogOut, Loader2, CalendarClock, Ban } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { SEO } from "@/components/SEO";
-import { useHospital } from "../admin/context/HospitalContext";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { ConfirmDialog } from "../admin/components/ConfirmDialog";
+import { cn } from "@/lib/utils";
+import { useHospital, type Appointment } from "../admin/context/HospitalContext";
 import { fmtDate } from "../admin/utils/formatters";
+import { getAvailableSlots, label12 } from "../lib/slots";
 import { supabase } from "../lib/supabase";
 
 const features = [
@@ -18,10 +22,18 @@ const features = [
 ];
 
 const Portal = () => {
-  const { appointments } = useHospital();
+  const { appointments, doctors, updateAppointment, refresh } = useHospital();
   const [mode, setMode] = useState<"login" | "register">("login");
   const [user, setUser] = useState<{ name: string; phone: string; email?: string; registeredDate: string } | null>(null);
   const [form, setForm] = useState({ name: "", phone: "", email: "", password: "" });
+
+  const [cancelAppt, setCancelAppt] = useState<Appointment | null>(null);
+  const [resch, setResch] = useState<Appointment | null>(null);
+  const [rDate, setRDate] = useState("");
+  const [rTime, setRTime] = useState("");
+  const [rSlots, setRSlots] = useState<string[]>([]);
+  const [rLoading, setRLoading] = useState(false);
+  const [rSaving, setRSaving] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -92,6 +104,50 @@ const Portal = () => {
 
   const normalizePhone = (p: string) => p.replace(/[^0-9]/g, "");
   const myAppointments = appointments.filter(a => user && normalizePhone(a.phone) === normalizePhone(user.phone));
+
+  const reschDoctor = resch ? doctors.find(d => d.name === resch.doctor) : undefined;
+
+  const loadRSlots = useCallback(async () => {
+    if (!resch || !rDate || !reschDoctor) { setRSlots([]); return; }
+    setRLoading(true);
+    const available = await getAvailableSlots(reschDoctor.id, rDate, reschDoctor.schedule, resch.id);
+    setRSlots(available);
+    setRLoading(false);
+  }, [resch, rDate, reschDoctor]);
+
+  useEffect(() => { setRTime(""); loadRSlots(); }, [rDate, loadRSlots]);
+
+  const openReschedule = (a: Appointment) => {
+    setResch(a);
+    setRDate("");
+    setRTime("");
+    setRSlots([]);
+  };
+
+  const doCancel = async () => {
+    if (!cancelAppt) return;
+    await updateAppointment(cancelAppt.id, { status: "Cancelled" });
+    toast.success("Appointment cancelled");
+    setCancelAppt(null);
+  };
+
+  const doReschedule = async () => {
+    if (!resch || !rDate || !rTime) return;
+    setRSaving(true);
+    const { error } = await supabase
+      .from("appointments")
+      .update({ date: rDate, time: rTime })
+      .eq("id", resch.id);
+    setRSaving(false);
+    if (error) {
+      toast.error("That slot was just taken. Please pick another.");
+      loadRSlots();
+      return;
+    }
+    await refresh();
+    toast.success("Appointment rescheduled");
+    setResch(null);
+  };
 
   return (
     <>
@@ -166,17 +222,29 @@ const Portal = () => {
             ) : (
               <div className="space-y-4">
                 {myAppointments.map(a => (
-                  <div key={a.id} className="p-4 rounded-xl border border-border flex justify-between items-center">
-                    <div>
-                      <div className="font-semibold text-primary-deep">{a.department} • {a.doctor}</div>
-                      <div className="text-sm text-muted-foreground">{fmtDate(a.date)} at {a.time}</div>
+                  <div key={a.id} className="p-4 rounded-xl border border-border space-y-3">
+                    <div className="flex justify-between items-center gap-3">
+                      <div>
+                        <div className="font-semibold text-primary-deep">{a.department} • {a.doctor}</div>
+                        <div className="text-sm text-muted-foreground">{fmtDate(a.date)} at {label12(a.time)}</div>
+                      </div>
+                      <span className={`text-xs px-2 py-1 rounded-full font-medium shrink-0 ${
+                        a.status === 'Scheduled' ? 'bg-primary-soft text-primary-deep' :
+                        a.status === 'Completed' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                      }`}>
+                        {a.status}
+                      </span>
                     </div>
-                    <span className={`text-xs px-2 py-1 rounded-full font-medium ${
-                      a.status === 'Scheduled' ? 'bg-primary-soft text-primary-deep' :
-                      a.status === 'Completed' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                    }`}>
-                      {a.status}
-                    </span>
+                    {a.status === 'Scheduled' && (
+                      <div className="flex gap-2 border-t border-border pt-3">
+                        <Button variant="outline" size="sm" onClick={() => openReschedule(a)}>
+                          <CalendarClock className="h-4 w-4 mr-1.5" /> Reschedule
+                        </Button>
+                        <Button variant="ghost" size="sm" className="text-red-600 hover:text-red-700" onClick={() => setCancelAppt(a)}>
+                          <Ban className="h-4 w-4 mr-1.5" /> Cancel
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -198,6 +266,72 @@ const Portal = () => {
           </div>
         </motion.div>
       </section>
+
+      <ConfirmDialog
+        open={!!cancelAppt}
+        title="Cancel this appointment?"
+        description={cancelAppt ? `${cancelAppt.department} with ${cancelAppt.doctor} on ${fmtDate(cancelAppt.date)} at ${label12(cancelAppt.time)} will be cancelled. This frees the slot for others.` : ""}
+        confirmLabel="Cancel Appointment"
+        onClose={() => setCancelAppt(null)}
+        onConfirm={doCancel}
+      />
+
+      <Dialog open={!!resch} onOpenChange={(v) => !v && setResch(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-display text-2xl">Reschedule Appointment</DialogTitle>
+            <DialogDescription>
+              {resch ? `${resch.department} • ${resch.doctor}` : ""} — pick a new date and time.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="r-date">New Date</Label>
+              <Input id="r-date" type="date" value={rDate} min={new Date().toISOString().slice(0, 10)} onChange={(e) => setRDate(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Available Time Slots</Label>
+              <div className="rounded-xl border border-border p-3 min-h-[84px]">
+                {!reschDoctor ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">This doctor is no longer listed. Please call us to reschedule.</p>
+                ) : !rDate ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">Pick a date to see available times.</p>
+                ) : rLoading ? (
+                  <div className="flex items-center justify-center gap-2 py-4 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" /> Checking availability…
+                  </div>
+                ) : rSlots.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">No free slots on this date. Try another date.</p>
+                ) : (
+                  <div className="grid grid-cols-3 gap-2">
+                    {rSlots.map((s) => (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => setRTime(s)}
+                        className={cn(
+                          "rounded-lg border text-xs font-semibold py-2 transition-colors",
+                          rTime === s
+                            ? "bg-primary text-white border-primary"
+                            : "border-border hover:border-primary hover:bg-primary-soft/40",
+                        )}
+                      >
+                        {label12(s)}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setResch(null)}>Cancel</Button>
+              <Button onClick={doReschedule} disabled={rSaving || !rTime}>
+                {rSaving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving…</> : "Confirm New Time"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 };
