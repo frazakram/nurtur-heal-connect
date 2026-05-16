@@ -129,14 +129,41 @@ const T = {
 let msgId = 0;
 const mkMsg = (from: Msg["from"], text: string): Msg => ({ id: ++msgId, from, text });
 
+const LS_KEY = "careHospital.apptBot.v1";
+const newId = () => globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2);
+const SAFE_RESUME = ["lang", "firstName", "lastName", "email", "phone", "doctor", "date"];
+
+interface Persisted {
+  sessionId?: string; lang?: Lang; step?: Step;
+  form?: Partial<BookingForm>; msgs?: Msg[];
+}
+const loadPersisted = (): Persisted => {
+  try { return JSON.parse(localStorage.getItem(LS_KEY) || "null") || {}; }
+  catch { return {}; }
+};
+
 export const AppointmentBot = () => {
   const { doctors, info } = useHospital();
+
+  const initialRef = useRef<Persisted>();
+  const initial = (initialRef.current ??= loadPersisted());
+  if (Array.isArray(initial.msgs) && initial.msgs.length && msgId === 0) {
+    msgId = initial.msgs.reduce((mx: number, m: Msg) => Math.max(mx, m.id || 0), 0);
+  }
+  const resumeStep: Step = (() => {
+    const s = initial.step;
+    if (!s || s === "idle" || s === "booking" || s === "done" || s === "error") return "idle";
+    if (SAFE_RESUME.includes(s)) return s;
+    return initial.form?.doctorId ? "date" : "idle";
+  })();
+
   const [open, setOpen] = useState(false);
-  const [step, setStep] = useState<Step>("idle");
-  const [lang, setLang] = useState<Lang>("en");
-  const [msgs, setMsgs] = useState<Msg[]>([]);
+  const [sessionId, setSessionId] = useState<string>(initial.sessionId || newId());
+  const [step, setStep] = useState<Step>(resumeStep);
+  const [lang, setLang] = useState<Lang>(initial.lang || "en");
+  const [msgs, setMsgs] = useState<Msg[]>(initial.msgs || []);
   const [input, setInput] = useState("");
-  const [form, setForm] = useState<Partial<BookingForm>>({});
+  const [form, setForm] = useState<Partial<BookingForm>>(initial.form || {});
   const [slots, setSlots] = useState<string[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [listening, setListening] = useState(false);
@@ -158,6 +185,48 @@ export const AppointmentBot = () => {
 
   const say  = useCallback((text: string) => setMsgs(p => [...p, mkMsg("bot",  text)]), []);
   const hear = useCallback((text: string) => setMsgs(p => [...p, mkMsg("user", text)]), []);
+
+  // Persist the session so a page refresh resumes an in-progress booking.
+  useEffect(() => {
+    if (step === "idle") return;
+    try {
+      localStorage.setItem(LS_KEY, JSON.stringify({ sessionId, lang, step, form, msgs: msgs.slice(-30) }));
+    } catch { /* quota / private mode — non-fatal */ }
+  }, [sessionId, lang, step, form, msgs]);
+
+  const clearPersist = () => { try { localStorage.removeItem(LS_KEY); } catch { /* ignore */ } };
+
+  // Lead capture: upsert the partial booking so staff can follow up if the
+  // patient abandons. Best-effort — never blocks or breaks the chat, and is
+  // a no-op until the booking_dropoffs migration is applied.
+  const saveDropoff = async (stage: string, extra: Partial<BookingForm> = {}) => {
+    const f = { ...form, ...extra };
+    if (!f.firstName && !f.phone) return;
+    try {
+      await supabase.from("booking_dropoffs").upsert({
+        session_id: sessionId,
+        stage,
+        patient_name: [f.firstName, f.lastName].filter(Boolean).join(" ") || null,
+        phone: f.phone || null,
+        email: f.email || null,
+        doctor_name: f.doctorName || null,
+        department: f.department || null,
+        date: f.date || null,
+        time: f.time || null,
+        status: "open",
+        source: "chatbot",
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "session_id" });
+    } catch { /* table not migrated yet — ignore */ }
+  };
+
+  const markBooked = async () => {
+    try {
+      await supabase.from("booking_dropoffs")
+        .update({ status: "booked", updated_at: new Date().toISOString() })
+        .eq("session_id", sessionId);
+    } catch { /* ignore */ }
+  };
 
   const startVoice = () => {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -211,6 +280,8 @@ export const AppointmentBot = () => {
   };
 
   const restart = () => {
+    clearPersist();
+    setSessionId(newId());
     setStep("idle"); setMsgs([]); setForm({});
     setSlots([]); setInput(""); setOpen(false);
   };
@@ -260,6 +331,8 @@ export const AppointmentBot = () => {
       }
 
       setStep("done");
+      markBooked();
+      clearPersist();
       say(t.doneMsg(form, !!form.email, lang));
     } catch {
       setStep("error");
@@ -310,21 +383,25 @@ export const AppointmentBot = () => {
       setForm(f => ({ ...f, phone: digits }));
       say(t.afterPhone);
       setStep("doctor");
+      saveDropoff("contact", { phone: digits });
       return;
     }
   };
 
   const selectDoctor = (doc: typeof doctors[0]) => {
     hear(doc.name);
-    setForm(f => ({ ...f, doctorId: doc.id, doctorName: doc.name, department: doc.accent === "gyn" ? "Gynecology" : "Pediatrics" }));
+    const dept = doc.accent === "gyn" ? "Gynecology" : "Pediatrics";
+    setForm(f => ({ ...f, doctorId: doc.id, doctorName: doc.name, department: dept }));
     say(t.afterDoctor);
     setStep("date");
+    saveDropoff("doctor", { doctorId: doc.id, doctorName: doc.name, department: dept });
   };
 
   const selectDate = async (date: string) => {
     hear(fmtDate(date, lang));
     setForm(f => ({ ...f, date }));
     setStep("time");
+    saveDropoff("date", { date });
     const available = await fetchSlots(form.doctorId!, date);
     setSlots(available);
     if (available.length === 0) { say(t.noSlots); setStep("date"); }
@@ -337,6 +414,7 @@ export const AppointmentBot = () => {
     setForm(updated);
     say(t.confirmSummary(updated, lang));
     setStep("confirm");
+    saveDropoff("confirm", { time });
   };
 
   // ── date grid (only days the selected doctor actually works) ──────────────

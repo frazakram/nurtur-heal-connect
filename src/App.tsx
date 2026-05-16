@@ -32,6 +32,7 @@ import Reports from "./admin/pages/Reports";
 import AdminSettings from "./admin/pages/Settings";
 import BlogAdmin from "./admin/pages/BlogAdmin";
 import Messages from "./admin/pages/Messages";
+import Followups from "./admin/pages/Followups";
 
 const queryClient = new QueryClient();
 
@@ -72,6 +73,7 @@ const App = () => (
                   <Route path="settings" element={<Protected page="settings"><AdminSettings /></Protected>} />
                   <Route path="blog-admin" element={<Protected page="blogPosts"><BlogAdmin /></Protected>} />
                   <Route path="messages" element={<Protected page="messages"><Messages /></Protected>} />
+                  <Route path="followups" element={<Protected page="followups"><Followups /></Protected>} />
                 </Route>
 
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

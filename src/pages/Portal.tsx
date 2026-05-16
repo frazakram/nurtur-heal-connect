@@ -22,7 +22,7 @@ const features = [
 ];
 
 const Portal = () => {
-  const { appointments, doctors, updateAppointment, refresh } = useHospital();
+  const { appointments, doctors, updateAppointment, refresh, info } = useHospital();
   const [mode, setMode] = useState<"login" | "register">("login");
   const [user, setUser] = useState<{ name: string; phone: string; email?: string; registeredDate: string } | null>(null);
   const [form, setForm] = useState({ name: "", phone: "", email: "", password: "" });
@@ -124,20 +124,57 @@ const Portal = () => {
     setRSlots([]);
   };
 
+  // Best-effort notification — the DB action already succeeded, so a mail
+  // failure must not surface as an error to the patient.
+  const sendApptEmail = async (
+    type: "cancellation" | "reschedule",
+    a: Appointment,
+    extra?: { oldDate?: string; oldTime?: string; precautions?: string },
+  ) => {
+    const to = user?.email;
+    if (!to) return;
+    try {
+      await supabase.functions.invoke("send-appointment-email", {
+        body: {
+          type,
+          to,
+          patientName: user?.name || a.patientName,
+          doctorName: a.doctor,
+          department: a.department,
+          date: a.date,
+          time: a.time,
+          phone: a.phone,
+          hospitalName: info.name,
+          hospitalPhone: info.phone,
+          hospitalEmail: info.email,
+          precautions: extra?.precautions,
+          oldDate: extra?.oldDate,
+          oldTime: extra?.oldTime,
+        },
+      });
+    } catch (e) {
+      console.error("Notification email failed:", e);
+    }
+  };
+
   const doCancel = async () => {
     if (!cancelAppt) return;
-    await updateAppointment(cancelAppt.id, { status: "Cancelled" });
+    const a = cancelAppt;
+    await updateAppointment(a.id, { status: "Cancelled" });
+    sendApptEmail("cancellation", a);
     toast.success("Appointment cancelled");
     setCancelAppt(null);
   };
 
   const doReschedule = async () => {
     if (!resch || !rDate || !rTime) return;
+    const a = resch;
+    const precautions = reschDoctor?.precautions;
     setRSaving(true);
     const { error } = await supabase
       .from("appointments")
       .update({ date: rDate, time: rTime })
-      .eq("id", resch.id);
+      .eq("id", a.id);
     setRSaving(false);
     if (error) {
       toast.error("That slot was just taken. Please pick another.");
@@ -145,6 +182,7 @@ const Portal = () => {
       return;
     }
     await refresh();
+    sendApptEmail("reschedule", { ...a, date: rDate, time: rTime }, { oldDate: a.date, oldTime: a.time, precautions });
     toast.success("Appointment rescheduled");
     setResch(null);
   };

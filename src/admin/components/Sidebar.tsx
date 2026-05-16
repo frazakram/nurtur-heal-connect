@@ -2,7 +2,7 @@ import { NavLink } from "react-router-dom";
 import { useState, useEffect } from "react";
 import {
   LayoutDashboard, Users, CalendarDays, BedDouble, UserCog, Wallet,
-  Receipt, Package, BarChart3, Settings as SettingsIcon, HeartPulse, X, MessageSquare
+  Receipt, Package, BarChart3, Settings as SettingsIcon, HeartPulse, X, MessageSquare, PhoneCall
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { can } from "../access";
@@ -21,6 +21,7 @@ const items = [
   { to: "/admin/reports", label: "Reports", icon: BarChart3, key: "reports" },
   { to: "/admin/blog-admin", label: "Blog", icon: HeartPulse, key: "blogPosts" },
   { to: "/admin/messages", label: "Messages", icon: MessageSquare, key: "messages" },
+  { to: "/admin/followups", label: "Follow-ups", icon: PhoneCall, key: "followups" },
   { to: "/admin/settings", label: "Settings", icon: SettingsIcon, key: "settings" },
 ];
 

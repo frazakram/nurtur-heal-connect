@@ -1,6 +1,10 @@
 /**
- * Daily reminder function — invoke via Supabase pg_cron.
- * Sends reminder emails to patients whose appointment is tomorrow.
+ * Multi-window, idempotent appointment reminders — invoke daily via pg_cron.
+ * Sends reminders 7 days and 1 day before the appointment. Each window is
+ * tracked per appointment (reminder_7d_sent / reminder_1d_sent) so re-running
+ * never double-sends, and a failed send is retried on the next run.
+ *
+ * Requires migration 20260517_reminders_and_dropoffs.sql.
  *
  * Setup SQL (run once in Supabase SQL Editor):
  *
@@ -18,9 +22,6 @@
  *     ) AS request_id;
  *     $$
  *   );
- *
- * Replace <YOUR_PROJECT_REF> and <YOUR_SUPABASE_ANON_KEY> from
- * Supabase dashboard → Project Settings → API.
  */
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
@@ -32,6 +33,11 @@ const cors = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+const WINDOWS = [
+  { days: 7, key: "reminder_7d", whenLabel: "in 7 days" },
+  { days: 1, key: "reminder_1d", whenLabel: "tomorrow" },
+];
+
 const fmt12 = (t: string) => {
   const [h, m] = t.split(":").map(Number);
   return `${h % 12 || 12}:${m.toString().padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`;
@@ -41,6 +47,20 @@ const fmtDateLong = (d: string) =>
   new Date(d + "T12:00:00").toLocaleDateString("en-IN", {
     weekday: "long", day: "numeric", month: "long", year: "numeric",
   });
+
+// Retry an async fn with exponential backoff (2s, 4s).
+async function retry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
+  let lastErr: unknown;
+  for (let i = 1; i <= attempts; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      if (i < attempts) await new Promise((r) => setTimeout(r, 2000 * i));
+    }
+  }
+  throw lastErr;
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -54,24 +74,6 @@ serve(async (req) => {
 
     const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
-    // Tomorrow's date in IST (UTC+5:30)
-    const now = new Date();
-    const ist = new Date(now.getTime() + (5.5 * 60 * 60 * 1000));
-    ist.setDate(ist.getDate() + 1);
-    const tomorrow = ist.toISOString().slice(0, 10);
-
-    // Fetch tomorrow's scheduled appointments that have an email
-    const { data: appointments, error } = await sb
-      .from("appointments")
-      .select("*, doctors(name, precautions, department)")
-      .eq("date", tomorrow)
-      .eq("status", "Scheduled")
-      .not("patient_email", "is", null)
-      .neq("patient_email", "");
-
-    if (error) throw error;
-
-    // Hospital info for email footer
     const { data: infoRow } = await sb
       .from("hospital_info")
       .select("name, phone, email")
@@ -87,41 +89,80 @@ serve(async (req) => {
       auth: { user: GMAIL_USER, pass: GMAIL_PASS },
     });
 
-    let sent = 0;
-    for (const appt of appointments ?? []) {
-      try {
-        const precautions = appt.doctors?.precautions || "";
-        const department  = appt.department || appt.doctors?.department || "";
+    const results: Array<Record<string, unknown>> = [];
 
-        await transporter.sendMail({
-          from: `"${hospitalName}" <${GMAIL_USER}>`,
-          to: appt.patient_email,
-          subject: `Reminder: Your appointment tomorrow — ${appt.doctors?.name} at ${fmt12(appt.time)}`,
-          html: buildHtml({
-            patientName: appt.patient_name,
-            doctorName: appt.doctors?.name || "",
-            department,
-            date: appt.date,
-            time: appt.time,
-            phone: appt.phone,
-            hospitalName,
-            hospitalPhone,
-            hospitalEmail,
-            precautions,
-          }),
-        });
-        sent++;
-      } catch (mailErr) {
-        console.error(`Failed for ${appt.patient_email}:`, mailErr);
+    for (const win of WINDOWS) {
+      // Target date in IST (UTC+5:30), `win.days` ahead.
+      const ist = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
+      ist.setDate(ist.getDate() + win.days);
+      const targetDate = ist.toISOString().slice(0, 10);
+
+      const { data: appointments, error } = await sb
+        .from("appointments")
+        .select("*, doctors(name, precautions, department)")
+        .eq("date", targetDate)
+        .eq("status", "Scheduled")
+        .eq(`${win.key}_sent`, false)
+        .not("patient_email", "is", null)
+        .neq("patient_email", "");
+
+      if (error) throw error;
+
+      let sent = 0;
+      let failed = 0;
+      for (const appt of appointments ?? []) {
+        try {
+          const precautions = appt.doctors?.precautions || "";
+          const department  = appt.department || appt.doctors?.department || "";
+
+          await retry(() =>
+            transporter.sendMail({
+              from: `"${hospitalName}" <${GMAIL_USER}>`,
+              to: appt.patient_email,
+              subject: `Reminder: Your appointment ${win.whenLabel} — ${appt.doctors?.name} at ${fmt12(appt.time)}`,
+              html: buildHtml({
+                patientName: appt.patient_name,
+                doctorName: appt.doctors?.name || "",
+                department,
+                date: appt.date,
+                time: appt.time,
+                phone: appt.phone,
+                hospitalName,
+                hospitalPhone,
+                hospitalEmail,
+                precautions,
+                whenLabel: win.whenLabel,
+              }),
+            })
+          );
+
+          await sb
+            .from("appointments")
+            .update({ [`${win.key}_sent`]: true, [`${win.key}_at`]: new Date().toISOString(), [`${win.key}_error`]: null })
+            .eq("id", appt.id);
+          sent++;
+        } catch (mailErr) {
+          const msg = mailErr instanceof Error ? mailErr.message : String(mailErr);
+          console.error(`Failed ${win.key} for ${appt.patient_email}:`, msg);
+          // Leave *_sent false so the next run retries; record the error.
+          await sb
+            .from("appointments")
+            .update({ [`${win.key}_error`]: msg })
+            .eq("id", appt.id);
+          failed++;
+        }
       }
+
+      results.push({ window: win.key, date: targetDate, sent, failed });
     }
 
-    return new Response(JSON.stringify({ ok: true, sent, date: tomorrow }), {
+    return new Response(JSON.stringify({ ok: true, results }), {
       headers: { ...cors, "Content-Type": "application/json" },
     });
-  } catch (err: any) {
-    console.error(err);
-    return new Response(JSON.stringify({ error: err.message }), {
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(msg);
+    return new Response(JSON.stringify({ error: msg }), {
       status: 500,
       headers: { ...cors, "Content-Type": "application/json" },
     });
@@ -132,7 +173,7 @@ function buildHtml(opts: {
   patientName: string; doctorName: string; department: string;
   date: string; time: string; phone: string;
   hospitalName: string; hospitalPhone: string; hospitalEmail: string;
-  precautions: string;
+  precautions: string; whenLabel: string;
 }) {
   const precHtml = opts.precautions
     ? `<div style="background:#fff7ed;border-radius:12px;padding:18px;margin:18px 0;border-left:4px solid #f59e0b;">
@@ -149,11 +190,11 @@ function buildHtml(opts: {
   <div style="background:linear-gradient(135deg,#0EA5E9,#0369A1);padding:28px;text-align:center;">
     <div style="font-size:26px;margin-bottom:6px;">⏰</div>
     <h1 style="color:#fff;margin:0;font-size:20px;">Appointment Reminder</h1>
-    <p style="color:rgba(255,255,255,0.85);margin:5px 0 0;font-size:13px;">Your appointment is <strong>tomorrow</strong></p>
+    <p style="color:rgba(255,255,255,0.85);margin:5px 0 0;font-size:13px;">Your appointment is <strong>${opts.whenLabel}</strong></p>
   </div>
   <div style="padding:24px;">
     <p style="color:#334155;font-size:15px;margin:0 0 4px;">Dear <strong>${opts.patientName}</strong>,</p>
-    <p style="color:#64748b;font-size:13px;margin:0 0 18px;">Just a friendly reminder for your appointment tomorrow.</p>
+    <p style="color:#64748b;font-size:13px;margin:0 0 18px;">Just a friendly reminder for your appointment ${opts.whenLabel}.</p>
 
     <div style="background:#f8fafc;border-radius:12px;padding:16px;border-left:4px solid #0EA5E9;margin-bottom:16px;">
       <table style="width:100%;border-collapse:collapse;font-size:14px;">
