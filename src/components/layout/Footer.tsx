@@ -47,7 +47,7 @@ export const Footer = () => {
         </ul>
         <div className="flex gap-3 mt-4">
           <a href="#" aria-label="Facebook" className="grid h-9 w-9 place-items-center rounded-full bg-background hover:bg-primary hover:text-primary-foreground transition-colors"><Facebook className="h-4 w-4" /></a>
-          <a href="#" aria-label="Instagram" className="grid h-9 w-9 place-items-center rounded-full bg-background hover:bg-gyn-strong hover:text-primary-foreground transition-colors"><Instagram className="h-4 w-4" /></a>
+          <a href="https://www.instagram.com/care.hospital.ssm/" target="_blank" rel="noreferrer" aria-label="Instagram" className="grid h-9 w-9 place-items-center rounded-full bg-background hover:bg-gyn-strong hover:text-primary-foreground transition-colors"><Instagram className="h-4 w-4" /></a>
           <a href={`https://wa.me/${info.phone.replace(/[^0-9]/g, '')}`} aria-label="WhatsApp" className="grid h-9 w-9 place-items-center rounded-full bg-background hover:bg-green-500 hover:text-white transition-colors"><MessageCircle className="h-4 w-4" /></a>
         </div>
       </div>

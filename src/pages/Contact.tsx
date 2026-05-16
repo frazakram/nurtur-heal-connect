@@ -126,7 +126,7 @@ const Contact = () => {
         <div className="rounded-3xl overflow-hidden shadow-card border border-border">
           <iframe
             title="Care Hospital location"
-            src="https://www.google.com/maps?q=Care+Hospital,+Daira,+Sasaram,+Bihar&output=embed"
+            src="https://www.google.com/maps?q=Khanquah+Madarsa,+Kabir+Colony,+Laxkariganj,+Sasaram,+Bihar+821115&output=embed"
             width="100%"
             height="420"
             style={{ border: 0 }}

@@ -87,7 +87,7 @@ const HospitalCtx = createContext<Ctx | null>(null);
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 
-const DEFAULT_INFO: HospitalInfo = { name: "Care Hospital", address: "Mohalla - Daira, Near Fruit Market, Sasaram, District - Rohtas, Bihar - 821115", phone: "9001118162", email: "care@carehospital.in" };
+const DEFAULT_INFO: HospitalInfo = { name: "Care Hospital", address: "Khanquah Madarsa, Kabir Colony, Laxkariganj, Sasaram, Bihar 821115", phone: "+91 6205 198 966", email: "care@carehospital.in" };
 const DEFAULT_MODULES: Record<string, boolean> = { patients: true, appointments: true, beds: true, staff: true, expenses: true, billing: true, inventory: true, reports: true, settings: true, blogPosts: true, messages: true, dashboard: true };
 const DEFAULT_TESTIMONIALS: Testimonial[] = [
   { id: uid(), name: "Priya S.", text: "The maternity care was exceptional. The team was kind, attentive, and made me feel safe throughout my pregnancy.", role: "New mother" },
