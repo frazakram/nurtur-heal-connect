@@ -34,6 +34,7 @@ export const mapAppointment = (r: any) => ({
   id: r.id, patientName: r.patient_name, phone: r.phone || "",
   doctor: r.doctors?.name || r.doctor_name || "", department: r.department || "Gynecology",
   date: r.date || "", time: r.time || "", status: r.status || "Scheduled",
+  bookingRef: r.booking_ref || "",
 });
 
 export const mapPatient = (r: any, beds: any[]) => {

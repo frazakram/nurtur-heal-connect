@@ -50,30 +50,25 @@ export function scheduledSlots(
 /**
  * Real bookable slots for a doctor on a date: scheduled slots minus
  * already-booked (status = Scheduled) minus past times if the date is today.
- * Optionally exclude an appointment id (so a reschedule doesn't collide
- * with its own current slot).
+ * (During a reschedule the appointment's own current slot shows as taken —
+ * that's fine, the patient is moving it anyway.)
  */
 export async function getAvailableSlots(
   doctorId: string,
   dateISO: string,
   schedule?: WeekSchedule | null,
-  excludeAppointmentId?: string,
 ): Promise<string[]> {
   const base = scheduledSlots(schedule, dateISO);
   if (base.length === 0) return [];
 
-  const { data } = await supabase
-    .from("appointments")
-    .select("id, time")
-    .eq("doctor_id", doctorId)
-    .eq("date", dateISO)
-    .eq("status", "Scheduled");
+  // Booked times come from a SECURITY DEFINER RPC (returns only "HH:MM"
+  // strings) so the public anon key can't read the appointments table.
+  const { data } = await supabase.rpc("public_booked_slots", {
+    p_doctor: doctorId,
+    p_date: dateISO,
+  });
 
-  const booked = new Set(
-    (data || [])
-      .filter((a: { id: string }) => a.id !== excludeAppointmentId)
-      .map((a: { time: string }) => hhmm(a.time)),
-  );
+  const booked = new Set((data || []).map((t: string) => hhmm(t)));
 
   const now = new Date();
   const isToday = dateISO === todayISO();

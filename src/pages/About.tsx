@@ -2,6 +2,7 @@ import { motion } from "framer-motion";
 import { Heart, Sparkles, Shield, CheckCircle2 } from "lucide-react";
 import { SEO } from "@/components/SEO";
 import { useHospital } from "../admin/context/HospitalContext";
+import hospitalPhoto from "@/assets/hospital.jpg";
 
 const values = [
   { icon: Heart, title: "Compassion", text: "We treat every patient like family — with empathy, patience, and warmth." },
@@ -33,7 +34,7 @@ const About = () => {
 
     <section className="container py-16 grid gap-10 md:grid-cols-2 items-center">
       <motion.img initial={{ opacity: 0, x: -20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }}
-        src="https://images.unsplash.com/photo-1516549655169-df83a0774514?w=800&q=80" alt="Care Hospital building" className="rounded-3xl shadow-card w-full h-[400px] object-cover" />
+        src={hospitalPhoto} alt="Care Hospital building" className="rounded-3xl shadow-card w-full h-[400px] object-cover" />
       <motion.div initial={{ opacity: 0, x: 20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }}>
         <h2 className="font-display text-3xl font-bold text-primary-deep">Our Story</h2>
         <p className="mt-4 text-foreground/70 leading-relaxed">
