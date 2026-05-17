@@ -9,7 +9,7 @@ import { SEO } from "@/components/SEO";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { ConfirmDialog } from "../admin/components/ConfirmDialog";
 import { cn } from "@/lib/utils";
-import { useHospital, type Appointment } from "../admin/context/HospitalContext";
+import { useHospital, type Appointment, type Department, type AppointmentStatus } from "../admin/context/HospitalContext";
 import { fmtDate } from "../admin/utils/formatters";
 import { getAvailableSlots, label12 } from "../lib/slots";
 import { supabase } from "../lib/supabase";
@@ -22,10 +22,11 @@ const features = [
 ];
 
 const Portal = () => {
-  const { appointments, doctors, updateAppointment, refresh, info } = useHospital();
+  const { doctors, info } = useHospital();
   const [mode, setMode] = useState<"login" | "register">("login");
   const [user, setUser] = useState<{ name: string; phone: string; email?: string; registeredDate: string } | null>(null);
   const [form, setForm] = useState({ name: "", phone: "", email: "", password: "" });
+  const [myAppts, setMyAppts] = useState<Appointment[]>([]);
 
   const [cancelAppt, setCancelAppt] = useState<Appointment | null>(null);
   const [resch, setResch] = useState<Appointment | null>(null);
@@ -80,11 +81,15 @@ const Portal = () => {
       });
       if (error) {
         toast.error(error.message);
+      } else if (!data.session) {
+        // Email confirmation is enabled on the project: no session yet.
+        toast.success("Account created — check your email to confirm, then log in.");
+        setMode("login");
       } else {
         toast.success("Account created successfully!");
       }
     } else {
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const { error } = await supabase.auth.signInWithPassword({
         email: form.email,
         password: form.password
       });
@@ -102,15 +107,41 @@ const Portal = () => {
     toast.success("Logged out");
   };
 
-  const normalizePhone = (p: string) => p.replace(/[^0-9]/g, "");
-  const myAppointments = appointments.filter(a => user && normalizePhone(a.phone) === normalizePhone(user.phone));
+  // The patient's own appointments come from a SECURITY DEFINER RPC that
+  // derives identity from the auth JWT (RLS blocks any direct read), so the
+  // browser can never see other patients' records.
+  const loadMyAppts = useCallback(async () => {
+    if (!user) { setMyAppts([]); return; }
+    const { data } = await supabase.rpc("patient_appointments");
+    const rows = (data || []) as Array<{
+      id: string; patient_name: string | null; phone: string | null;
+      doctor_id: string | null; department: string | null;
+      date: string | null; time: string | null; status: string | null;
+      booking_ref: string | null;
+    }>;
+    setMyAppts(rows.map(r => ({
+      id: r.id,
+      patientName: r.patient_name || "",
+      phone: r.phone || "",
+      doctor: doctors.find(d => d.id === r.doctor_id)?.name || "",
+      department: (r.department as Department) || "Gynecology",
+      date: r.date || "",
+      time: (r.time || "").slice(0, 5),
+      status: (r.status as AppointmentStatus) || "Scheduled",
+      bookingRef: r.booking_ref || "",
+    })));
+  }, [user, doctors]);
+
+  useEffect(() => { loadMyAppts(); }, [loadMyAppts]);
+
+  const myAppointments = myAppts;
 
   const reschDoctor = resch ? doctors.find(d => d.name === resch.doctor) : undefined;
 
   const loadRSlots = useCallback(async () => {
     if (!resch || !rDate || !reschDoctor) { setRSlots([]); return; }
     setRLoading(true);
-    const available = await getAvailableSlots(reschDoctor.id, rDate, reschDoctor.schedule, resch.id);
+    const available = await getAvailableSlots(reschDoctor.id, rDate, reschDoctor.schedule);
     setRSlots(available);
     setRLoading(false);
   }, [resch, rDate, reschDoctor]);
@@ -160,10 +191,18 @@ const Portal = () => {
   const doCancel = async () => {
     if (!cancelAppt) return;
     const a = cancelAppt;
-    await updateAppointment(a.id, { status: "Cancelled" });
+    const { data, error } = await supabase.rpc("patient_set_appointment", {
+      p_id: a.id, p_status: "Cancelled",
+    });
+    if (error || data === false) {
+      toast.error("Couldn't cancel. Please call us.");
+      setCancelAppt(null);
+      return;
+    }
     sendApptEmail("cancellation", a);
     toast.success("Appointment cancelled");
     setCancelAppt(null);
+    loadMyAppts();
   };
 
   const doReschedule = async () => {
@@ -171,20 +210,24 @@ const Portal = () => {
     const a = resch;
     const precautions = reschDoctor?.precautions;
     setRSaving(true);
-    const { error } = await supabase
-      .from("appointments")
-      .update({ date: rDate, time: rTime })
-      .eq("id", a.id);
+    const { data, error } = await supabase.rpc("patient_set_appointment", {
+      p_id: a.id, p_date: rDate, p_time: rTime,
+    });
     setRSaving(false);
     if (error) {
+      // The partial unique index rejected it — the slot was just taken.
       toast.error("That slot was just taken. Please pick another.");
       loadRSlots();
       return;
     }
-    await refresh();
+    if (data === false) {
+      toast.error("Couldn't reschedule. Please call us.");
+      return;
+    }
     sendApptEmail("reschedule", { ...a, date: rDate, time: rTime }, { oldDate: a.date, oldTime: a.time, precautions });
     toast.success("Appointment rescheduled");
     setResch(null);
+    loadMyAppts();
   };
 
   return (

@@ -55,6 +55,7 @@ const Appointments = () => {
 
   const cols: Column<Appointment>[] = [
     { key: "patientName", header: "Patient", render: (r) => <div><div className="font-medium text-primary-deep">{r.patientName}</div><div className="text-xs text-muted-foreground">{r.phone}</div></div> },
+    { key: "bookingRef", header: "Booking ID", render: (r) => r.bookingRef ? <span className="font-mono text-xs font-semibold text-primary-deep">{r.bookingRef}</span> : <span className="text-xs text-muted-foreground">—</span> },
     { key: "doctor", header: "Doctor" },
     { key: "department", header: "Department" },
     { key: "date", header: "Date", render: (r) => fmtDate(r.date) },

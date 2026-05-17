@@ -10,7 +10,7 @@ export type Department = "Gynecology" | "Pediatrics";
 export type PatientStatus = "OPD" | "IPD" | "Discharged";
 export interface Patient { id: string; name: string; age: number; gender: "Male" | "Female" | "Other"; phone: string; address?: string; department: Department; doctor: string; type: "OPD" | "IPD"; status: PatientStatus; admissionDate: string; notes?: string; bedId?: string | null; }
 export type AppointmentStatus = "Scheduled" | "Completed" | "Cancelled";
-export interface Appointment { id: string; patientName: string; phone: string; doctor: string; department: Department; date: string; time: string; status: AppointmentStatus; }
+export interface Appointment { id: string; patientName: string; phone: string; doctor: string; department: Department; date: string; time: string; status: AppointmentStatus; bookingRef?: string; }
 export type BedStatus = "Available" | "Occupied" | "Maintenance";
 export type Ward = "General Ward (Gynecology)" | "Maternity Ward" | "Pediatrics Ward" | "NICU" | "Private Rooms";
 export interface Bed { id: string; number: string; ward: Ward; status: BedStatus; patientId?: string | null; patientName?: string | null; admissionDate?: string | null; }
@@ -205,16 +205,25 @@ export const HospitalProvider = ({ children }: { children: ReactNode }) => {
     // --- Appointments ---
     addAppointment: async (a) => {
       const doctorId = await findDoctorId(a.doctor);
-      const { data, error } = await supabase.from("appointments").insert([{
-        patient_name: a.patientName, phone: a.phone, department: a.department,
-        doctor_id: doctorId, date: a.date, time: a.time, status: "Scheduled",
-      }]).select("*, doctors(name)").single();
-      if (!error && data) {
-        const mapped = mapAppointment(data);
-        setArr("appointments", arr => [mapped, ...arr]);
-        return mapped.id;
-      }
-      return "";
+      // Goes through the SECURITY DEFINER RPC so it works whether the caller
+      // is staff or an anonymous public visitor (RLS blocks direct insert).
+      const { data, error } = await supabase.rpc("public_create_appointment", {
+        p_patient_name: a.patientName,
+        p_phone: a.phone,
+        p_email: "",
+        p_department: a.department,
+        p_doctor_id: doctorId,
+        p_date: a.date,
+        p_time: a.time,
+      });
+      if (error || !data) return "";
+      const res = data as { id: string; booking_ref: string };
+      setArr("appointments", arr => [{
+        id: res.id, patientName: a.patientName, phone: a.phone,
+        doctor: a.doctor, department: a.department, date: a.date,
+        time: a.time, status: "Scheduled" as const, bookingRef: res.booking_ref,
+      }, ...arr]);
+      return res.id;
     },
     updateAppointment: async (id, a) => {
       const row: any = {};

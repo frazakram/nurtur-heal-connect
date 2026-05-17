@@ -1,19 +1,34 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { MessageSquare, X, Send, Mic, MicOff } from "lucide-react";
+import { MessageSquare, X, Send, Mic, MicOff, RotateCcw } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { getAvailableSlots, scheduledSlots } from "../lib/slots";
 import { useHospital } from "../admin/context/HospitalContext";
 
 type Step =
-  | "idle" | "lang" | "firstName" | "lastName" | "email" | "phone"
+  | "idle" | "lang" | "category" | "bookingId"
+  | "firstName" | "lastName" | "email" | "otp" | "phone"
   | "doctor" | "date" | "time" | "confirm" | "booking" | "done" | "error";
 
 type Lang = "en" | "hi";
+
+interface OtpResponse {
+  ok: boolean;
+  reason?: "rate_limited" | "expired" | "locked" | "invalid" | "bad_email"
+    | "bad_action" | "server_error" | "not_found" | "no_email";
+  masked?: string;
+  attemptsLeft?: number;
+  booking?: {
+    firstName: string; lastName: string; phone: string;
+    doctorId: string; department: string; bookingRef: string;
+  };
+  returning?: { name: string; phone: string; bookingRef: string };
+}
 
 interface Msg { id: number; from: "bot" | "user"; text: string; }
 interface BookingForm {
   firstName: string; lastName: string; email: string; phone: string;
   doctorId: string; doctorName: string; department: string; date: string; time: string;
+  bookingRef: string;
 }
 
 const fmtTime = (t: string) => {
@@ -37,11 +52,32 @@ const T = {
     greeting2: "I'll help you book an appointment in a few easy steps.",
     askFirstName: "What is your first name?",
     afterFirstName: (n: string) => `Nice to meet you, ${n}! What is your last name?`,
-    afterLastName: "Can you share your email address? (Type 'skip' to continue without email)",
-    invalidEmail: "That doesn't look like a valid email. Please try again or type 'skip'.",
-    skipWord: "skip",
-    emailSkipped: "No problem! What is your 10-digit mobile number?",
-    emailAccepted: "Got it! What is your 10-digit mobile number?",
+    afterLastName: "Please share your email address — we'll email a quick verification code to confirm it's really you.",
+    invalidEmail: "That doesn't look like a valid email. Please enter a valid email address.",
+    categoryPrompt: "Are you a new patient, or returning for a follow-up?",
+    catNew: "🆕 New patient",
+    catFollow: "🔁 Follow-up patient",
+    askBookingId: "Please enter your Booking ID (looks like CARE-AB12CD). You'll find it in your confirmation email.",
+    phBookingId: "e.g. CARE-AB12CD",
+    lookingUp: "Looking up your booking…",
+    bookingNotFound: "I couldn't find a booking with that ID. Please re-check and type it again — or tap the ↻ button above to book as a new patient.",
+    foundBooking: (n: string) => `Found it — welcome back, ${n}! 🎉 To protect your details, I'll email you a verification code.`,
+    noEmailOnFile: "There's no email on that booking. Please type your email so I can verify it's you.",
+    otpSending: "Sending your verification code…",
+    otpSent: (m: string) => `I've emailed a 6-digit code to ${m}. Please enter it below — it's valid for 10 minutes.`,
+    otpResent: (m: string) => `A new 6-digit code has been sent to ${m}.`,
+    phOtp: "6-digit code",
+    otpVerifyBtn: "Verify",
+    otpResendBtn: "Resend code",
+    otpInvalid: (left: number) => `That code isn't right. ${left} attempt${left === 1 ? "" : "s"} left.`,
+    otpExpired: "That code has expired. Tap “Resend code” to get a new one.",
+    otpLocked: "Too many wrong attempts. Tap “Resend code” for a fresh code.",
+    otpTooMany: "Too many code requests. Please wait a few minutes and try again.",
+    otpSendFail: "I couldn't send the code. Please check the email address and try again.",
+    otpVerified: "✅ Email verified!",
+    welcomeBackAuto: (n: string, r: string) => `Welcome back, ${n}! 👋 I found your records (Booking ID: ${r}). I'll continue this as a follow-up — just choose a doctor, date and time.`,
+    afterOtpAskPhone: "✅ Email verified! What is your 10-digit mobile number?",
+    followupContinue: "Great — let's book your follow-up. Please choose a doctor:",
     invalidPhone: "Please enter a valid 10-digit mobile number.",
     invalidName: "Please enter a valid name.",
     afterPhone: "Great! Please select your preferred doctor:",
@@ -60,9 +96,11 @@ const T = {
     bookingSpinner: "Confirming your appointment…",
     doneMsg: (f: Partial<BookingForm>, hasEmail: boolean, lang: Lang) =>
       `✅ Your appointment is confirmed!\n\n` +
+      (f.bookingRef ? `🔖 Booking ID: ${f.bookingRef}\n` : "") +
       `👨‍⚕️ Doctor: ${f.doctorName}\n` +
       `📅 Date: ${fmtDate(f.date!, lang)}\n` +
       `⏰ Time: ${fmtTime(f.time!)}\n\n` +
+      (f.bookingRef ? "Save your Booking ID — quote it next time for a faster follow-up. " : "") +
       (hasEmail ? "A confirmation email with pre-visit instructions has been sent. " : "") +
       "Please arrive 10 minutes early. See you soon! 🏥",
     errorMsg: "Sorry, something went wrong. Please call us directly or try again.",
@@ -74,7 +112,7 @@ const T = {
     tryAgain: "Try Again",
     phFirstName: "Your first name…",
     phLastName: "Your last name…",
-    phEmail: "Email or type skip…",
+    phEmail: "you@example.com",
     phPhone: "10-digit mobile number…",
   },
   hi: {
@@ -84,11 +122,32 @@ const T = {
     greeting2: "मैं कुछ आसान चरणों में आपकी अपॉइंटमेंट बुक करने में मदद करूँगा।",
     askFirstName: "आपका पहला नाम क्या है?",
     afterFirstName: (n: string) => `${n} जी, मिलकर अच्छा लगा! 😊 आपका अंतिम नाम क्या है?`,
-    afterLastName: "क्या आप अपना ईमेल पता बता सकते हैं? (बिना ईमेल के जारी रखने के लिए 'skip' लिखें)",
-    invalidEmail: "यह ईमेल सही नहीं लग रहा। कृपया फिर से लिखें या 'skip' करें।",
-    skipWord: "skip",
-    emailSkipped: "कोई बात नहीं! आपका 10 अंकों का मोबाइल नंबर क्या है?",
-    emailAccepted: "ठीक है! आपका 10 अंकों का मोबाइल नंबर क्या है?",
+    afterLastName: "कृपया अपना ईमेल पता बताएँ — हम यह पक्का करने के लिए एक छोटा सत्यापन कोड भेजेंगे कि यह वाकई आप हैं।",
+    invalidEmail: "यह ईमेल सही नहीं लग रहा। कृपया एक सही ईमेल पता दर्ज करें।",
+    categoryPrompt: "आप नए मरीज़ हैं या फ़ॉलो-अप के लिए दोबारा आ रहे हैं?",
+    catNew: "🆕 नया मरीज़",
+    catFollow: "🔁 फ़ॉलो-अप मरीज़",
+    askBookingId: "कृपया अपना बुकिंग आईडी दर्ज करें (जैसे CARE-AB12CD)। यह आपके पुष्टि ईमेल में मिलेगा।",
+    phBookingId: "जैसे CARE-AB12CD",
+    lookingUp: "आपकी बुकिंग ढूँढ रहे हैं…",
+    bookingNotFound: "इस आईडी से कोई बुकिंग नहीं मिली। कृपया दोबारा जाँचें और फिर से लिखें — या नए मरीज़ के रूप में बुक करने के लिए ऊपर ↻ बटन दबाएँ।",
+    foundBooking: (n: string) => `मिल गया — वापसी पर स्वागत है, ${n}! 🎉 आपकी जानकारी सुरक्षित रखने के लिए मैं आपको एक सत्यापन कोड ईमेल करूँगा।`,
+    noEmailOnFile: "उस बुकिंग पर कोई ईमेल नहीं है। कृपया अपना ईमेल लिखें ताकि मैं पुष्टि कर सकूँ कि यह आप हैं।",
+    otpSending: "आपका सत्यापन कोड भेजा जा रहा है…",
+    otpSent: (m: string) => `मैंने ${m} पर 6 अंकों का कोड भेजा है। कृपया उसे नीचे दर्ज करें — यह 10 मिनट के लिए वैध है।`,
+    otpResent: (m: string) => `${m} पर एक नया 6 अंकों का कोड भेज दिया गया है।`,
+    phOtp: "6 अंकों का कोड",
+    otpVerifyBtn: "सत्यापित करें",
+    otpResendBtn: "कोड फिर भेजें",
+    otpInvalid: (left: number) => `यह कोड सही नहीं है। ${left} प्रयास बाकी।`,
+    otpExpired: "यह कोड समाप्त हो गया है। नया कोड पाने के लिए “कोड फिर भेजें” दबाएँ।",
+    otpLocked: "बहुत अधिक ग़लत प्रयास। नया कोड पाने के लिए “कोड फिर भेजें” दबाएँ।",
+    otpTooMany: "बहुत अधिक कोड अनुरोध। कृपया कुछ मिनट रुककर फिर प्रयास करें।",
+    otpSendFail: "मैं कोड नहीं भेज सका। कृपया ईमेल पता जाँचें और फिर प्रयास करें।",
+    otpVerified: "✅ ईमेल सत्यापित!",
+    welcomeBackAuto: (n: string, r: string) => `वापसी पर स्वागत है, ${n}! 👋 मुझे आपका रिकॉर्ड मिल गया (बुकिंग आईडी: ${r})। मैं इसे फ़ॉलो-अप के रूप में जारी रखूँगा — बस डॉक्टर, तारीख और समय चुनें।`,
+    afterOtpAskPhone: "✅ ईमेल सत्यापित! आपका 10 अंकों का मोबाइल नंबर क्या है?",
+    followupContinue: "बढ़िया — आइए आपका फ़ॉलो-अप बुक करें। कृपया डॉक्टर चुनें:",
     invalidPhone: "कृपया 10 अंकों का सही मोबाइल नंबर दर्ज करें।",
     invalidName: "कृपया एक सही नाम दर्ज करें।",
     afterPhone: "बढ़िया! कृपया अपने पसंदीदा डॉक्टर चुनें:",
@@ -107,9 +166,11 @@ const T = {
     bookingSpinner: "आपकी अपॉइंटमेंट कन्फर्म हो रही है…",
     doneMsg: (f: Partial<BookingForm>, hasEmail: boolean, lang: Lang) =>
       `✅ आपकी अपॉइंटमेंट कन्फर्म हो गई!\n\n` +
+      (f.bookingRef ? `🔖 बुकिंग आईडी: ${f.bookingRef}\n` : "") +
       `👨‍⚕️ डॉक्टर: ${f.doctorName}\n` +
       `📅 तारीख: ${fmtDate(f.date!, lang)}\n` +
       `⏰ समय: ${fmtTime(f.time!)}\n\n` +
+      (f.bookingRef ? "अपनी बुकिंग आईडी सहेज लें — अगली बार तेज़ फ़ॉलो-अप के लिए इसे बताएँ। " : "") +
       (hasEmail ? "पुष्टि ईमेल प्री-विज़िट निर्देशों के साथ भेज दिया गया है। " : "") +
       "कृपया 10 मिनट पहले आएँ। जल्द मिलते हैं! 🏥",
     errorMsg: "क्षमा करें, कुछ गड़बड़ हो गई। कृपया हमें सीधे कॉल करें या फिर से प्रयास करें।",
@@ -121,7 +182,7 @@ const T = {
     tryAgain: "फिर से प्रयास करें",
     phFirstName: "पहला नाम लिखें…",
     phLastName: "अंतिम नाम लिखें…",
-    phEmail: "ईमेल या 'skip' लिखें…",
+    phEmail: "you@example.com",
     phPhone: "10 अंकों का मोबाइल नंबर…",
   },
 } as const;
@@ -131,7 +192,9 @@ const mkMsg = (from: Msg["from"], text: string): Msg => ({ id: ++msgId, from, te
 
 const LS_KEY = "careHospital.apptBot.v1";
 const newId = () => globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2);
-const SAFE_RESUME = ["lang", "firstName", "lastName", "email", "phone", "doctor", "date"];
+// "otp"/"bookingId" are intentionally NOT resumable: the OTP is short-lived
+// and server-side, so a refreshed session must re-request a fresh code.
+const SAFE_RESUME = ["lang", "category", "firstName", "lastName", "email", "phone", "doctor", "date"];
 
 interface Persisted {
   sessionId?: string; lang?: Lang; step?: Step;
@@ -167,6 +230,9 @@ export const AppointmentBot = () => {
   const [slots, setSlots] = useState<string[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [listening, setListening] = useState(false);
+  const [isFollowUp, setIsFollowUp] = useState(false);
+  const [otpMasked, setOtpMasked] = useState("");
+  const [busy, setBusy] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const recognitionRef = useRef<any>(null);
@@ -175,10 +241,10 @@ export const AppointmentBot = () => {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [msgs, loadingSlots]);
+  }, [msgs, loadingSlots, busy]);
 
   useEffect(() => {
-    if (["firstName", "lastName", "email", "phone"].includes(step)) {
+    if (["firstName", "lastName", "email", "phone", "bookingId", "otp"].includes(step)) {
       setTimeout(() => inputRef.current?.focus(), 50);
     }
   }, [step]);
@@ -275,8 +341,8 @@ export const AppointmentBot = () => {
     const tx = T[chosen];
     say(tx.greeting1(info.name));
     say(tx.greeting2);
-    say(tx.askFirstName);
-    setStep("firstName");
+    say(tx.categoryPrompt);
+    setStep("category");
   };
 
   const restart = () => {
@@ -284,6 +350,142 @@ export const AppointmentBot = () => {
     setSessionId(newId());
     setStep("idle"); setMsgs([]); setForm({});
     setSlots([]); setInput(""); setOpen(false);
+    setIsFollowUp(false); setOtpMasked(""); setBusy(false);
+  };
+
+  // ── patient category ──────────────────────────────────────────────────────
+  const selectCategory = (kind: "new" | "follow") => {
+    if (kind === "follow") {
+      setIsFollowUp(true);
+      hear(t.catFollow);
+      say(t.askBookingId);
+      setStep("bookingId");
+    } else {
+      setIsFollowUp(false);
+      hear(t.catNew);
+      say(t.askFirstName);
+      setStep("firstName");
+    }
+  };
+
+  // Normalize loose user input ("ab12cd", "care ab12cd") to CARE-XXXXXX.
+  const normRef = (v: string) => {
+    const s = v.toUpperCase().replace(/[^A-Z0-9]/g, "");
+    const body = s.replace(/^CARE/, "");
+    return "CARE-" + body;
+  };
+
+  // ── email OTP ─────────────────────────────────────────────────────────────
+  // The OTP function does all appointment PII reads (server-side). The bot
+  // only ever sends an email OR a booking ref and gets back a masked address.
+  const sendOtp = async (
+    opts: { email?: string; bookingRef?: string },
+    resend = false,
+  ) => {
+    setBusy(true);
+    say(t.otpSending);
+    try {
+      const { data, error } = await supabase.functions.invoke<OtpResponse>("verify-email-otp", {
+        body: { action: "send", email: opts.email, bookingRef: opts.bookingRef },
+      });
+      if (error || !data?.ok) {
+        if (data?.reason === "not_found") say(t.bookingNotFound);
+        else if (data?.reason === "no_email") { say(t.noEmailOnFile); setStep("email"); }
+        else if (data?.reason === "rate_limited") say(t.otpTooMany);
+        else say(t.otpSendFail);
+        if (data?.reason === "not_found") setStep("bookingId");
+        else if (data?.reason !== "no_email") setStep(opts.bookingRef ? "bookingId" : "email");
+        return;
+      }
+      const shown = data.masked || opts.email || "";
+      setOtpMasked(shown);
+      say(resend ? t.otpResent(shown) : t.otpSent(shown));
+      setStep("otp");
+    } catch {
+      say(t.otpSendFail);
+      setStep(opts.bookingRef ? "bookingId" : "email");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const afterVerified = (data: OtpResponse) => {
+    say(t.otpVerified);
+    if (data.booking) {
+      const b = data.booking;
+      const doc = doctors.find(d => d.id === b.doctorId);
+      setIsFollowUp(true);
+      setForm(f => ({
+        ...f,
+        firstName: b.firstName, lastName: b.lastName,
+        phone: b.phone, doctorId: b.doctorId,
+        doctorName: doc?.name || "",
+        department: b.department || f.department,
+        bookingRef: b.bookingRef,
+      }));
+      say(t.followupContinue);
+      setStep("doctor");
+      return;
+    }
+    if (data.returning?.bookingRef) {
+      const r = data.returning;
+      setIsFollowUp(true);
+      setForm(f => ({ ...f, bookingRef: r.bookingRef, phone: f.phone || r.phone }));
+      say(t.welcomeBackAuto(r.name || `${form.firstName} ${form.lastName}`.trim(), r.bookingRef));
+      say(t.followupContinue);
+      setStep("doctor");
+      return;
+    }
+    if (isFollowUp) {
+      say(t.followupContinue);
+      setStep("doctor");
+    } else {
+      say(t.afterOtpAskPhone);
+      setStep("phone");
+    }
+  };
+
+  const verifyOtp = async (codeRaw: string) => {
+    const code = codeRaw.replace(/\D/g, "");
+    if (code.length !== 6) { say(t.otpInvalid(0)); return; }
+    hear("••••••");
+    setInput("");
+    setBusy(true);
+    try {
+      const { data, error } = await supabase.functions.invoke<OtpResponse>("verify-email-otp", {
+        body: {
+          action: "verify",
+          email: form.email,
+          otp: code,
+          bookingRef: form.bookingRef || undefined,
+        },
+      });
+      if (error || !data) {
+        say(t.otpSendFail);
+      } else if (data.ok) {
+        afterVerified(data);
+      } else if (data.reason === "expired") {
+        say(t.otpExpired);
+      } else if (data.reason === "locked") {
+        say(t.otpLocked);
+      } else {
+        say(t.otpInvalid(typeof data.attemptsLeft === "number" ? data.attemptsLeft : 0));
+      }
+    } catch {
+      say(t.otpSendFail);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // ── follow-up: resolve an existing booking by its reference ───────────────
+  // No DB read here — the OTP function looks up the booking server-side and
+  // sends the code to the email on file. The patient's details are released
+  // only after the code is verified (see afterVerified).
+  const lookupBooking = async (refRaw: string) => {
+    const ref = normRef(refRaw);
+    setForm(f => ({ ...f, bookingRef: ref }));
+    await sendOtp({ bookingRef: ref });
   };
 
   // ── fetch slots ───────────────────────────────────────────────────────────
@@ -299,24 +501,25 @@ export const AppointmentBot = () => {
   const confirmBooking = async () => {
     setStep("booking");
     try {
-      const { error } = await supabase.from("appointments").insert([{
-        patient_name: `${form.firstName} ${form.lastName}`,
-        phone: form.phone,
-        patient_email: form.email || null,
-        department: form.department,
-        doctor_id: form.doctorId,
-        date: form.date,
-        time: form.time,
-        status: "Scheduled",
-      }]);
+      const patientName = `${form.firstName} ${form.lastName}`.trim();
+      const { data: created, error } = await supabase.rpc("public_create_appointment", {
+        p_patient_name: patientName,
+        p_phone: form.phone,
+        p_email: form.email || "",
+        p_department: form.department,
+        p_doctor_id: form.doctorId,
+        p_date: form.date,
+        p_time: form.time,
+      });
       if (error) throw error;
+      const bookingRef = (created as { booking_ref?: string } | null)?.booking_ref || "";
 
       if (form.email) {
         const doc = doctors.find(d => d.id === form.doctorId);
         await supabase.functions.invoke("send-appointment-email", {
           body: {
             to: form.email,
-            patientName: `${form.firstName} ${form.lastName}`,
+            patientName,
             doctorName: form.doctorName,
             department: form.department,
             date: form.date,
@@ -326,6 +529,7 @@ export const AppointmentBot = () => {
             hospitalPhone: info.phone,
             hospitalEmail: info.email,
             precautions: doc?.precautions || "",
+            bookingRef,
           },
         });
       }
@@ -333,7 +537,7 @@ export const AppointmentBot = () => {
       setStep("done");
       markBooked();
       clearPersist();
-      say(t.doneMsg(form, !!form.email, lang));
+      say(t.doneMsg({ ...form, bookingRef }, !!form.email, lang));
     } catch {
       setStep("error");
       say(t.errorMsg);
@@ -362,18 +566,18 @@ export const AppointmentBot = () => {
       setStep("email");
       return;
     }
-    if (step === "email") {
+    if (step === "bookingId") {
       hear(val);
-      if (val.toLowerCase() === t.skipWord) {
-        setForm(f => ({ ...f, email: "" }));
-        say(t.emailSkipped);
-      } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) {
-        say(t.invalidEmail); return;
-      } else {
-        setForm(f => ({ ...f, email: val }));
-        say(t.emailAccepted);
-      }
-      setStep("phone");
+      lookupBooking(val);
+      return;
+    }
+    if (step === "email") {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) { say(t.invalidEmail); return; }
+      hear(val);
+      const email = val.toLowerCase();
+      setForm(f => ({ ...f, email }));
+      saveDropoff("contact", { email });
+      sendOtp({ email });
       return;
     }
     if (step === "phone") {
@@ -429,7 +633,7 @@ export const AppointmentBot = () => {
     }
   }
 
-  const isTextStep = ["firstName", "lastName", "email", "phone"].includes(step);
+  const isTextStep = ["firstName", "lastName", "email", "phone", "bookingId"].includes(step);
 
   return (
     <>
@@ -456,6 +660,14 @@ export const AppointmentBot = () => {
               <div className="font-display font-bold text-sm leading-tight">{t.headerTitle}</div>
               <div className="text-xs text-white/80 truncate">{info.name}</div>
             </div>
+            {!["idle", "lang", "booking", "done", "error"].includes(step) && (
+              <button
+                onClick={() => { hear(t.startOver); restart(); }}
+                title={lang === "hi" ? "फिर से शुरू करें" : "Start over"}
+                className="grid h-8 w-8 place-items-center rounded-full hover:bg-white/20 transition-colors shrink-0 text-white/80 hover:text-white">
+                <RotateCcw className="h-3.5 w-3.5" />
+              </button>
+            )}
             <button onClick={() => setOpen(false)} className="grid h-8 w-8 place-items-center rounded-full hover:bg-white/20 transition-colors shrink-0">
               <X className="h-4 w-4" />
             </button>
@@ -472,7 +684,7 @@ export const AppointmentBot = () => {
                 }`}>{m.text}</div>
               </div>
             ))}
-            {loadingSlots && (
+            {(loadingSlots || busy) && (
               <div className="flex justify-start">
                 <div className="bg-background border border-border rounded-2xl rounded-tl-sm px-4 py-3 flex gap-1.5 shadow-sm">
                   <span className="h-2 w-2 rounded-full bg-primary animate-bounce [animation-delay:0ms]" />
@@ -507,6 +719,40 @@ export const AppointmentBot = () => {
                   🇮🇳 हिंदी
                 </button>
               </div>
+            )}
+
+            {/* Patient category */}
+            {step === "category" && (
+              <div className="p-3 flex flex-col gap-2">
+                <button onClick={() => selectCategory("new")}
+                  className="w-full rounded-xl border-2 border-primary bg-primary-soft text-primary-deep font-bold py-3 text-sm hover:bg-primary hover:text-white transition-colors">
+                  {t.catNew}
+                </button>
+                <button onClick={() => selectCategory("follow")}
+                  className="w-full rounded-xl border-2 border-primary/60 text-primary-deep font-bold py-3 text-sm hover:bg-primary hover:text-white transition-colors">
+                  {t.catFollow}
+                </button>
+              </div>
+            )}
+
+            {/* OTP entry */}
+            {step === "otp" && (
+              <form onSubmit={e => { e.preventDefault(); if (!busy) verifyOtp(input); }} className="p-3 space-y-2">
+                <input ref={inputRef} value={input}
+                  onChange={e => setInput(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  inputMode="numeric" autoComplete="one-time-code" placeholder={t.phOtp}
+                  className="w-full text-center tracking-[0.5em] text-lg font-bold rounded-xl border border-border bg-background px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-primary" />
+                <div className="flex gap-2">
+                  <button type="submit" disabled={busy || input.length !== 6}
+                    className="flex-1 rounded-xl bg-primary text-white font-semibold py-2.5 text-sm hover:bg-primary-deep transition-colors disabled:opacity-50">
+                    {t.otpVerifyBtn}
+                  </button>
+                  <button type="button" disabled={busy} onClick={() => sendOtp({ email: form.email || undefined, bookingRef: form.bookingRef || undefined }, true)}
+                    className="flex-1 rounded-xl border border-border text-sm font-semibold py-2.5 hover:bg-secondary/60 transition-colors disabled:opacity-50">
+                    {t.otpResendBtn}
+                  </button>
+                </div>
+              </form>
             )}
 
             {/* Doctor selection */}
@@ -600,28 +846,30 @@ export const AppointmentBot = () => {
               <form onSubmit={e => { e.preventDefault(); handleSend(); }} className="flex gap-2 p-3">
                 <input ref={inputRef} value={input} onChange={e => setInput(e.target.value)}
                   type="text"
+                  disabled={busy}
                   placeholder={
                     listening
                       ? (lang === "hi" ? "सुन रहा हूँ…" : "Listening…")
                       : step === "firstName" ? t.phFirstName
                       : step === "lastName"  ? t.phLastName
                       : step === "email"     ? t.phEmail
+                      : step === "bookingId" ? t.phBookingId
                       : t.phPhone
                   }
-                  className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-60"
                 />
                 {/* Mic button */}
-                <button type="button" onClick={startVoice}
+                <button type="button" onClick={startVoice} disabled={busy}
                   title={lang === "hi" ? "बोलकर बताएँ" : "Speak your answer"}
-                  className={`grid h-10 w-10 place-items-center rounded-xl transition-colors shrink-0 ${
+                  className={`grid h-10 w-10 place-items-center rounded-xl transition-colors shrink-0 disabled:opacity-50 ${
                     listening
                       ? "bg-red-500 text-white animate-pulse"
                       : "border border-border text-muted-foreground hover:border-primary hover:text-primary"
                   }`}>
                   {listening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
                 </button>
-                <button type="submit"
-                  className="grid h-10 w-10 place-items-center rounded-xl bg-primary text-white hover:bg-primary-deep transition-colors shrink-0">
+                <button type="submit" disabled={busy}
+                  className="grid h-10 w-10 place-items-center rounded-xl bg-primary text-white hover:bg-primary-deep transition-colors shrink-0 disabled:opacity-50">
                   <Send className="h-4 w-4" />
                 </button>
               </form>

@@ -66,6 +66,7 @@ function buildEmailHtml(opts: {
   date: string; time: string; phone: string;
   hospitalName: string; hospitalPhone: string; hospitalEmail?: string;
   precautions?: string; oldDate?: string; oldTime?: string;
+  bookingRef?: string;
 }) {
   const theme = THEME[opts.type];
   const showExtras = opts.type === "confirmation" || opts.type === "reschedule";
@@ -81,6 +82,14 @@ function buildEmailHtml(opts: {
     ? `<p style="color:#94a3b8;font-size:13px;margin:0 0 14px;text-decoration:line-through;">
          Previously: ${fmtDateLong(opts.oldDate)}${opts.oldTime ? ` at ${fmt12(opts.oldTime)}` : ""}
        </p>`
+    : "";
+
+  const bookingRefBox = (opts.type === "confirmation" && opts.bookingRef)
+    ? `<div style="background:#ecfeff;border:1px solid #a5f3fc;border-radius:12px;padding:14px;margin-bottom:18px;text-align:center;">
+         <p style="margin:0 0 4px;color:#0e7490;font-size:12px;font-weight:600;">SAVE YOUR BOOKING ID</p>
+         <p style="margin:0;color:#0369A1;font-size:20px;font-weight:800;letter-spacing:2px;">${opts.bookingRef}</p>
+         <p style="margin:6px 0 0;color:#64748b;font-size:12px;">Quote this for a faster follow-up booking next time.</p>
+       </div>`
     : "";
 
   const remindersBox = showExtras
@@ -115,6 +124,7 @@ function buildEmailHtml(opts: {
 
     <div style="background:#f8fafc;border-radius:12px;padding:18px;border-left:4px solid ${theme.color};margin-bottom:18px;${opts.type === "cancellation" ? "opacity:0.7;" : ""}">
       <table style="width:100%;border-collapse:collapse;font-size:14px;">
+        ${opts.bookingRef ? `<tr><td style="padding:7px 0;color:#64748b;width:36%;">🔖 Booking ID</td><td style="padding:7px 0;font-weight:800;letter-spacing:1px;color:#0369A1;">${opts.bookingRef}</td></tr>` : ""}
         <tr><td style="padding:7px 0;color:#64748b;width:36%;">👨‍⚕️ Doctor</td><td style="padding:7px 0;font-weight:700;color:#0369A1;">${opts.doctorName}</td></tr>
         <tr><td style="padding:7px 0;color:#64748b;">🏥 Department</td><td style="padding:7px 0;font-weight:600;">${opts.department}</td></tr>
         <tr><td style="padding:7px 0;color:#64748b;">📅 ${opts.type === "reschedule" ? "New Date" : "Date"}</td><td style="padding:7px 0;font-weight:600;">${fmtDateLong(opts.date)}</td></tr>
@@ -123,6 +133,7 @@ function buildEmailHtml(opts: {
       </table>
     </div>
 
+    ${bookingRefBox}
     ${precautionsHtml}
     ${remindersBox}
 
@@ -146,7 +157,7 @@ serve(async (req) => {
     const {
       to, patientName, doctorName, department, date, time,
       phone, hospitalName, hospitalPhone, hospitalEmail, precautions,
-      oldDate, oldTime,
+      oldDate, oldTime, bookingRef,
       isReminder = false,
     } = body;
 
@@ -176,7 +187,7 @@ serve(async (req) => {
         from: `"${hospitalName}" <${GMAIL_USER}>`,
         to,
         subject: subjectByType[type],
-        html: buildEmailHtml({ type, patientName, doctorName, department, date, time, phone, hospitalName, hospitalPhone, hospitalEmail, precautions, oldDate, oldTime }),
+        html: buildEmailHtml({ type, patientName, doctorName, department, date, time, phone, hospitalName, hospitalPhone, hospitalEmail, precautions, oldDate, oldTime, bookingRef }),
       })
     );
 
