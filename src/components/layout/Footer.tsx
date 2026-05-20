@@ -54,6 +54,8 @@ export const Footer = () => {
     </div>
     <div className="border-t border-border/60 py-5 text-center text-xs text-muted-foreground">
       © {new Date().getFullYear()} Care Hospital, Sasaram. All rights reserved.
+      {" · "}
+      <Link to="/privacy" className="hover:text-primary-deep underline underline-offset-2">Privacy Policy</Link>
     </div>
   </footer>
   );
