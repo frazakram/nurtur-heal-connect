@@ -27,6 +27,7 @@ const Portal = () => {
   const [user, setUser] = useState<{ name: string; phone: string; email?: string; registeredDate: string } | null>(null);
   const [form, setForm] = useState({ name: "", phone: "", email: "", password: "" });
   const [myAppts, setMyAppts] = useState<Appointment[]>([]);
+  const [consent, setConsent] = useState(false);
 
   const [cancelAppt, setCancelAppt] = useState<Appointment | null>(null);
   const [resch, setResch] = useState<Appointment | null>(null);
@@ -68,6 +69,10 @@ const Portal = () => {
     e.preventDefault();
 
     if (mode === "register") {
+      if (!consent) {
+        toast.error("Please accept the Privacy Policy to create an account.");
+        return;
+      }
       const { data, error } = await supabase.auth.signUp({
         email: form.email,
         password: form.password,
@@ -75,18 +80,26 @@ const Portal = () => {
           data: {
             name: form.name,
             phone: form.phone,
-            role: 'patient'
+            role: 'patient',
+            consent_at: new Date().toISOString()
           }
         }
       });
       if (error) {
         toast.error(error.message);
-      } else if (!data.session) {
-        // Email confirmation is enabled on the project: no session yet.
-        toast.success("Account created — check your email to confirm, then log in.");
-        setMode("login");
       } else {
-        toast.success("Account created successfully!");
+        // DPDP: log the consent the checkbox captured (best-effort).
+        supabase.rpc("record_consent", {
+          p_subject: form.email,
+          p_channel: "portal_registration",
+        });
+        if (!data.session) {
+          // Email confirmation is enabled on the project: no session yet.
+          toast.success("Account created — check your email to confirm, then log in.");
+          setMode("login");
+        } else {
+          toast.success("Account created successfully!");
+        }
       }
     } else {
       const { error } = await supabase.auth.signInWithPassword({
@@ -266,6 +279,14 @@ const Portal = () => {
               <div className="space-y-2"><Label htmlFor="p-pass">Password</Label>
                 <Input id="p-pass" type="password" required value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
               </div>
+              {mode === "register" && (
+                <label className="flex items-start gap-2 text-xs text-muted-foreground">
+                  <input type="checkbox" required checked={consent} onChange={(e) => setConsent(e.target.checked)} className="mt-0.5 h-4 w-4 shrink-0 accent-primary" />
+                  <span>I consent to {info.name} storing and processing my personal and health
+                    information as described in the{" "}
+                    <a href="/privacy" target="_blank" rel="noreferrer" className="text-primary-deep underline underline-offset-2">Privacy Policy</a>.</span>
+                </label>
+              )}
               <Button type="submit" size="lg" className="w-full">{mode === "login" ? "Login" : "Create Account"}</Button>
             </form>
           </motion.div>

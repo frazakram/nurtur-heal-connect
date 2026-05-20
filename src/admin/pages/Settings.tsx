@@ -34,6 +34,21 @@ const Settings = () => {
   const [resetLoading, setResetLoading] = useState<string | null>(null);
   const [confirmDeleteDoc, setConfirmDeleteDoc] = useState<string | null>(null);
   
+  const [erasePhone, setErasePhone] = useState("");
+  const [confirmErase, setConfirmErase] = useState(false);
+  const [erasing, setErasing] = useState(false);
+
+  const doErase = async () => {
+    setErasing(true);
+    const { data, error } = await supabase.rpc("anonymize_patient", { p_phone: erasePhone });
+    setErasing(false);
+    setConfirmErase(false);
+    if (error) { toast.error(error.message || "Erase failed"); return; }
+    const r = (data || {}) as { appointments?: number; patients?: number; dropoffs?: number };
+    toast.success(`PII erased — appointments: ${r.appointments ?? 0}, patient records: ${r.patients ?? 0}, leads: ${r.dropoffs ?? 0}`);
+    setErasePhone("");
+  };
+
   const [docModalOpen, setDocModalOpen] = useState(false);
   const [editingDoc, setEditingDoc] = useState<any>(null);
   const [docForm, setDocForm] = useState<any>({ name: "", role: "", qualification: "", experience: "", bio: "", languages: "", img: "", accent: "gyn", precautions: "", schedule: DEFAULT_SCHEDULE });
@@ -138,6 +153,25 @@ const Settings = () => {
           </div>
         </div>
 
+        <div className="rounded-2xl bg-background border border-border p-6 shadow-card lg:col-span-2">
+          <h3 className="font-display font-bold text-primary-deep mb-1">Data &amp; Privacy (DPDP)</h3>
+          <p className="text-xs text-muted-foreground mb-4">
+            On a verified erasure request, anonymise a person's identifying details by phone number.
+            Clinical &amp; billing rows are retained as required by medical record-keeping law, but the
+            patient is no longer identifiable.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-3 sm:items-end max-w-xl">
+            <div className="space-y-2 flex-1">
+              <Label>Patient phone number</Label>
+              <Input value={erasePhone} onChange={(e) => setErasePhone(e.target.value)} placeholder="Phone on the records to erase" />
+            </div>
+            <Button variant="outline" className="text-red-600 hover:text-red-700"
+              disabled={!erasePhone || erasing} onClick={() => setConfirmErase(true)}>
+              {erasing ? "Erasing…" : "Erase patient data"}
+            </Button>
+          </div>
+        </div>
+
         <Dialog open={docModalOpen} onOpenChange={setDocModalOpen}>
           <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
             <DialogHeader><DialogTitle>{editingDoc ? "Edit Doctor" : "Add Doctor"}</DialogTitle></DialogHeader>
@@ -203,6 +237,14 @@ const Settings = () => {
         description="This will permanently remove the doctor profile."
         onClose={() => setConfirmDeleteDoc(null)}
         onConfirm={() => { if (confirmDeleteDoc) { deleteDoctor(confirmDeleteDoc); toast.success("Doctor removed"); } }}
+      />
+
+      <ConfirmDialog
+        open={confirmErase}
+        title="Erase this person's data?"
+        description={`This permanently anonymises identifying details for ${erasePhone} across appointments, patient records and leads. Clinical/billing history is retained as legally required. This cannot be undone.`}
+        onClose={() => setConfirmErase(false)}
+        onConfirm={doErase}
       />
     </>
   );

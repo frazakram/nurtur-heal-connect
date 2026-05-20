@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { useHospital, type Department } from "../admin/context/HospitalContext";
 import { fmtDate } from "../admin/utils/formatters";
 import { getAvailableSlots, label12 } from "@/lib/slots";
+import { supabase } from "@/lib/supabase";
 
 interface Props {
   trigger?: React.ReactNode;
@@ -28,6 +29,7 @@ export const AppointmentModal = ({ trigger, variant = "default", size = "default
   const [slots, setSlots] = useState<string[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [consent, setConsent] = useState(false);
   const [confirmation, setConfirmation] = useState<{ id: string; date: string; time: string; doctor: string } | null>(null);
 
   // Resolve the actual doctor: explicit prop wins, else first doctor of the
@@ -61,6 +63,10 @@ export const AppointmentModal = ({ trigger, variant = "default", size = "default
       toast.error("Please fill out all fields");
       return;
     }
+    if (!consent) {
+      toast.error("Please accept the Privacy Policy to book.");
+      return;
+    }
     if (!doctor) {
       toast.error("No doctor is available for this department yet. Please call us to book.");
       return;
@@ -86,6 +92,9 @@ export const AppointmentModal = ({ trigger, variant = "default", size = "default
       return;
     }
 
+    // DPDP: log the consent the checkbox captured (best-effort).
+    supabase.rpc("record_consent", { p_subject: form.phone, p_channel: "booking_modal" });
+
     toast.success("Appointment booked successfully!");
     setConfirmation({ id, date: form.date, time: form.time, doctor: doctor.name });
   };
@@ -96,6 +105,7 @@ export const AppointmentModal = ({ trigger, variant = "default", size = "default
       setTimeout(() => {
         setForm({ name: "", phone: "", department: defaultDepartment || "", date: "", time: "" });
         setSlots([]);
+        setConsent(false);
         setConfirmation(null);
       }, 300);
     }
@@ -218,7 +228,13 @@ export const AppointmentModal = ({ trigger, variant = "default", size = "default
                 </div>
               </div>
 
-              <Button type="submit" className="w-full" size="lg" disabled={submitting || !form.time}>
+              <label className="flex items-start gap-2 text-xs text-muted-foreground">
+                <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} className="mt-0.5 h-4 w-4 shrink-0 accent-primary" />
+                <span>I agree to the{" "}
+                  <a href="/privacy" target="_blank" rel="noreferrer" className="text-primary-deep underline underline-offset-2">Privacy Policy</a>
+                  {" "}and consent to my information being used to manage this appointment.</span>
+              </label>
+              <Button type="submit" className="w-full" size="lg" disabled={submitting || !form.time || !consent}>
                 {submitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Booking…</> : "Confirm Appointment"}
               </Button>
             </form>

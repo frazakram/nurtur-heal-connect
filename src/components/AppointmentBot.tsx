@@ -90,7 +90,8 @@ const T = {
       `📞 ${f.phone}` +
       (f.email ? `\n📧 ${f.email}` : "") +
       `\n🏥 ${f.department}\n👨‍⚕️ ${f.doctorName}\n` +
-      `📅 ${fmtDate(f.date!, lang)}\n⏰ ${fmtTime(f.time!)}\n\nShall I confirm this booking?`,
+      `📅 ${fmtDate(f.date!, lang)}\n⏰ ${fmtTime(f.time!)}\n\n` +
+      `By confirming, you agree to our Privacy Policy (see the link in the website footer).\n\nShall I confirm this booking?`,
     confirmYes: "Yes, confirm!",
     confirmNo: "Start over",
     bookingSpinner: "Confirming your appointment…",
@@ -160,7 +161,8 @@ const T = {
       `📞 ${f.phone}` +
       (f.email ? `\n📧 ${f.email}` : "") +
       `\n🏥 ${f.department}\n👨‍⚕️ ${f.doctorName}\n` +
-      `📅 ${fmtDate(f.date!, lang)}\n⏰ ${fmtTime(f.time!)}\n\nक्या मैं यह अपॉइंटमेंट कन्फर्म करूँ?`,
+      `📅 ${fmtDate(f.date!, lang)}\n⏰ ${fmtTime(f.time!)}\n\n` +
+      `कन्फर्म करके आप हमारी प्राइवेसी पॉलिसी से सहमत होते हैं (लिंक वेबसाइट फ़ुटर में)।\n\nक्या मैं यह अपॉइंटमेंट कन्फर्म करूँ?`,
     confirmYes: "हाँ, कन्फर्म करें!",
     confirmNo: "फिर से शुरू करें",
     bookingSpinner: "आपकी अपॉइंटमेंट कन्फर्म हो रही है…",
@@ -533,6 +535,12 @@ export const AppointmentBot = () => {
           },
         });
       }
+
+      // DPDP: log the consent shown at the confirm step (best-effort).
+      supabase.rpc("record_consent", {
+        p_subject: form.email || form.phone || "",
+        p_channel: "booking_bot",
+      });
 
       setStep("done");
       markBooked();
